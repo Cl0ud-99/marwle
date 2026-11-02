@@ -1,0 +1,19 @@
+{
+  "name": "marwle-sugarline-district",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MARWLE · Sugarline District — a playable candy-city cinematic",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:site": "node build.mjs --site",
+    "build:single": "node build.mjs --single",
+    "serve": "node serve.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.21.5"
+  },
+  "dependencies": {
+    "three": "0.186.1"
+  }
+}

@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#74c9ef" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230a3f55'/%3E%3Ctext x='16' y='23' font-family='Arial Black' font-size='19' fill='%23ffd66e' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E" />
+  <meta name="description" content="MARWLE · Sugarline District — a playable candy-city cinematic demo." />
+  <title>MARWLE · Sugarline District</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body class="loading">
+  <div id="app" aria-label="MARWLE 糖线街区互动场景">
+    <canvas id="stage" tabindex="0" aria-label="3D city viewport"></canvas>
+
+    <div class="letterbox top" aria-hidden="true"></div>
+    <div class="letterbox bottom" aria-hidden="true"></div>
+
+    <header class="topbar chrome">
+      <a class="brand" href="#" aria-label="MARWLE home">
+        <span class="brand-mark"><i></i><i></i><i></i></span>
+        <span class="brand-word">MARWLE</span>
+        <span class="brand-sub">SUGARLINE&nbsp;/&nbsp;07</span>
+      </a>
+      <div class="top-actions">
+        <span class="status-pill"><b></b> PLAYABLE WORLD PREVIEW</span>
+        <button class="icon-btn muted" id="sound-btn" aria-label="Enable sound">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path class="wave" d="M16 8c1.3 1.1 2 2.4 2 4s-.7 2.9-2 4M18.7 5.2c2.1 1.7 3.3 3.9 3.3 6.8s-1.2 5.1-3.3 6.8"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <section id="intro" aria-label="Intro">
+      <div class="intro-copy">
+        <p class="eyebrow"><span></span> A CINEMATIC CITY STUDY</p>
+        <h1>MARWLE</h1>
+        <div class="intro-rule"><span></span><i>糖线街区</i><span></span></div>
+        <p class="intro-sub">A sweeter tomorrow, one street at a time.</p>
+        <p class="intro-cn">一场关于糖果、阳光与明天的漫游。</p>
+        <div class="intro-actions">
+          <button id="enter-btn" class="primary-btn"><span>进入街区</span><small>WALK IN</small></button>
+          <button id="cinema-btn" class="ghost-btn"><span>观看镜头</span><small>CINEMATIC</small></button>
+        </div>
+      </div>
+      <div class="intro-meta">
+        <div class="meta-block"><span>SCENE</span><b>01 / SUGARLINE DISTRICT</b></div>
+        <div class="meta-block"><span>TIME</span><b id="clock-readout">14:08 SUNLIT</b></div>
+      </div>
+      <div class="intro-index" aria-hidden="true">01<span>/</span>05</div>
+    </section>
+
+    <div id="start-screen" class="start-screen" aria-hidden="true"></div>
+
+    <section id="hud" class="chrome" aria-label="Controls">
+      <div class="location-card">
+        <div class="location-kicker"><span class="live-dot"></span> LIVE STREET</div>
+        <div class="location-name">糖线街区 <span>SUGARLINE DISTRICT</span></div>
+        <div class="location-meta">DISTRICT 07 · ALT. 12m · 14:08</div>
+      </div>
+      <div class="mode-bar">
+        <button id="explore-btn" class="mode-btn" data-mode-button><span>漫游</span><small>WALK</small></button>
+        <button id="cine-btn" class="mode-btn" data-mode-button><span>电影</span><small>CINEMA</small></button>
+        <button id="photo-btn" class="mode-btn" data-mode-button><span>摄影</span><small>PHOTO</small></button>
+        <div class="mode-sep"></div>
+        <div class="shot-dots" aria-label="Camera presets">
+          <button data-shot="hero" class="shot-dot active" title="1 · Arrival">01</button>
+          <button data-shot="sign" class="shot-dot" title="2 · Marquee">02</button>
+          <button data-shot="water" class="shot-dot" title="3 · Waterline">03</button>
+          <button data-shot="fountain" class="shot-dot" title="4 · Fountain">04</button>
+          <button data-shot="skyline" class="shot-dot" title="5 · Skyline">05</button>
+        </div>
+      </div>
+      <div class="controls-card">
+        <span><b>W A S D</b> 移动</span>
+        <span><b>拖拽</b> 环视</span>
+        <span><b>SHIFT</b> 疾走</span>
+        <span><b>C</b> 电影镜头</span>
+        <span><b>P</b> 摄影模式</span>
+      </div>
+    </section>
+
+    <div id="walk-hint" class="walk-hint chrome">
+      <span class="hint-orb"></span>
+      <div><b>进入街区了</b><small>拖拽画面环视 · 使用 W A S D 行走</small></div>
+    </div>
+
+    <div class="cinema-caption chrome" id="cinema-caption">
+      <span id="caption-index">SHOT 01</span>
+      <i></i>
+      <span id="caption-title">ARRIVAL</span>
+    </div>
+
+    <div id="debug-stats" class="debug-stats"></div>
+  </div>
+
+  <div id="loader">
+    <div class="loader-noise"></div>
+    <div class="loader-inner">
+      <div class="loader-mark"><span>M</span><i></i><i></i><i></i></div>
+      <div class="loader-word">MARWLE</div>
+      <div class="loader-sub">SUGARLINE DISTRICT <span>·</span> SCENE 01</div>
+      <div class="loader-track"><i id="loader-bar"></i></div>
+      <div class="loader-row"><span id="loader-status">WAKING THE SUN</span><span class="loader-percent">PV / 01</span></div>
+    </div>
+    <div class="loader-footer">A REAL-TIME CITY STUDY <span>·</span> WEBGL 2</div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
