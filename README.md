@@ -2,9 +2,7 @@
 
 **by DeepSeek-V4.1-flash 🐳**
 
-**DSH-PTC**
-
-**1 scene · 100% procedural**
+**2 districts · 300 m · 100% procedural**
 
 [**Live preview**](https://cl0ud-99.github.io/marwle/) — runs in the browser, nothing to install.
 
@@ -22,7 +20,22 @@ A playable candy-city street: two linked districts on a 300 m boulevard, a mirro
 
 ## What it is
 
-A one-scene interactive world preview with a small cinematic shell around it. Walk the avenue, switch to the auto camera, or jump between five composed shots.
+A one-scene interactive world preview with a small cinematic shell around it. Walk the avenue through two districts, switch to the auto camera, or jump between seven composed cameras (five on keys 1–5, plus the south and north gate views).
+
+## About
+
+MARWLE is a procedural, single-scene city demo: two linked districts on a 300 m avenue, a mirrored canal, a fountain court, a gatehouse clock tower and a JOY-faced palace at the far end.
+
+- **15 named storefronts**, each with its own sign, plus **25 infill buildings** that close the skyline gaps between the main blocks.
+- **3 landmarks**: the gatehouse clock tower behind the opening, the JOY palace at the south terminus, and the candy ferris wheel.
+- **20 pedestrians**, **12 cars**, **8 scooters**, **2 candy carts**, plus cafés, benches, planters, lamps, vending machines and pennant lines.
+- Everything — geometry, signs, textures, sky, clouds, audio — is generated at load time. No model files, imported HDRIs or audio samples.
+- Roughly **10.2M triangles / ~986 draw calls** in the standard walk view; photo mode adds GTAO and DOF.
+- Controls: **WASD / arrows** walk, mouse drag looks, **Space** jumps, **P** photo mode, **1–5** composed cameras. **?shot=south** and **?shot=north** are direct links to the two landmark views.
+
+Built with Three.js and esbuild; all scene code, shaders, UI and audio are original. Third-party attributions are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Files
 
 | Path | Role |
 | --- | --- |
@@ -33,7 +46,7 @@ A one-scene interactive world preview with a small cinematic shell around it. Wa
 | `src/water.js` | planar reflection + wet-pavement shader |
 | `src/materials.js` | PBR materials, procedural facade patterns, sign canvases |
 | `src/sky.js` | 4096×2048 equirect sky, cumulus, PMREM environment |
-| `src/post.js` | HDR composer, bloom, sun scattering, ACES grade, optional GTAO + DOF |
+| `src/post.js` | HDR composer, bloom, sun scattering, AgX grade, optional GTAO + DOF |
 | `src/quality.js` | quality presets (draft / standard / cinematic / photo) |
 | `src/audio.js` | procedural Web Audio ambience |
 | `site/` | built static site deployed to GitHub Pages |
@@ -128,7 +141,7 @@ No server is needed for the single file; every image, font and audio graph is em
 | --- | --- |
 | `?ui=0` | Hide all overlays for clean captures |
 | `?shot=hero` | Start on a fixed composed camera |
-| `shot=fountain,water,sign,street,skyline` | Other composed cameras |
+| `shot=fountain,water,sign,street,skyline,south,north` | Other composed cameras |
 | `freeze=1&t=10` | Freeze the world clock at a chosen time |
 | `?quality=low` | Draft preset: 0.85× DPR, 1024² shadows, low detail |
 | `?quality=high` | Standard preset (default): 1.35× DPR cap, 3072² shadows |
