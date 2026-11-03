@@ -147,6 +147,49 @@ function relievedNormal(normalTex, heightTex, strength = .5, size = 512) {
   return t;
 }
 
+/** Parallax-occlusion mapping for horizontal ground materials. The mirror
+ *  height sheet is ray-marched in UV space; colour/roughness/AO follow the
+ *  displaced UV, which is what sells the paving depth. */
+function applyPOM(mat, heightTex, scale = .035, steps = 6) {
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uPomHeight = { value: heightTex };
+    shader.uniforms.uPomScale = { value: scale };
+    mat.userData.shader = shader;
+    shader.vertexShader = 'varying vec3 vPomWorld;\n' + shader.vertexShader
+      .replace('void main() {', 'void main() {\n\tvPomWorld = (modelMatrix * vec4(position, 1.0)).xyz;');
+    shader.fragmentShader = 'varying vec3 vPomWorld;\nuniform sampler2D uPomHeight;\nuniform float uPomScale;\n' + shader.fragmentShader;
+    shader.fragmentShader = shader.fragmentShader.replace('void main() {', 'void main() {\n'
+      + 'vec3 pomV = normalize(cameraPosition - vPomWorld);\n'
+      + 'float pomNdV = max(dot(pomV, vec3(0.0, 1.0, 0.0)), 0.25);\n'
+      + 'vec2 pomDir = (pomV.xz / pomNdV) * uPomScale;\n'
+      + 'vec2 pomUv = vMapUv;\n'
+      + 'float pomLayer = 1.0;\n'
+      + 'for (int pomI = 0; pomI < ' + steps + '; pomI++) {\n'
+      + '  float pomH = texture2D(uPomHeight, pomUv).r;\n'
+      + '  if (pomH >= pomLayer) break;\n'
+      + '  pomUv -= pomDir / float(' + steps + ');\n'
+      + '  pomLayer -= 1.0 / float(' + steps + ');\n'
+      + '}\n');
+    shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>',
+      'vec4 pomSampled = texture2D(map, pomUv);\n  diffuseColor *= pomSampled;');
+    shader.fragmentShader = shader.fragmentShader.replace('#include <roughnessmap_fragment>',
+      'float roughnessFactor = roughness;\n'
+      + '#ifdef USE_ROUGHNESSMAP\n'
+      + '  vec4 texelRoughness = texture2D(roughnessMap, pomUv);\n'
+      + '  roughnessFactor *= texelRoughness.g;\n'
+      + '#endif');
+    shader.fragmentShader = shader.fragmentShader.replace('#include <aomap_fragment>',
+      '#ifdef USE_AOMAP\n'
+      + '  float ambientOcclusion = (texture2D(aoMap, pomUv).r - 1.0) * aoMapIntensity + 1.0;\n'
+      + '  reflectedLight.indirectDiffuse *= ambientOcclusion;\n'
+      + '  #if defined(USE_ENVMAP) && defined(STANDARD)\n'
+      + '    reflectedLight.indirectSpecular *= ambientOcclusion;\n'
+      + '  #endif\n'
+      + '#endif');
+  };
+  mat.customProgramCacheKey = () => 'pom' + steps;
+}
+
 export function stripeTexture(a = '#ff6d75', b = '#fff2d6', count = 12, vertical = true) {
   return canvasTexture(512, 512, (ctx, w, h) => {
     ctx.fillStyle = b; ctx.fillRect(0,0,w,h);
@@ -367,6 +410,8 @@ export async function buildMaterials(renderer) {
     roughnessMap: TEX.paversR, aoMap: TEX.paversAO, aoMapIntensity: 1.0,
     roughness: .62, clearcoat: .24, clearcoatRoughness: .4, envMapIntensity: .8
   });
+  applyPOM(MAT.road, TEX.asphaltH, .045, 6);
+  applyPOM(MAT.sidewalk, TEX.paversH, .055, 6);
   MAT.marble = new THREE.MeshPhysicalMaterial({
     color: '#f8e6dc', map: TEX.marble, normalMap: TEX.marbleNR, normalScale: new THREE.Vector2(.7,.7),
     roughnessMap: TEX.marbleR, roughness: .35, clearcoat: .65, clearcoatRoughness: .2, envMapIntensity: 1.2

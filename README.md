@@ -71,7 +71,7 @@ Details worth reading:
 - **Only the three landmarks get the ultra tier.** Hero LOD switches tessellation to `ultra` while building Fizz Dome, Dream Tower and Marwle Hall, then drops back to the base tier for the rest of the street.
 - **Hero windows have real depth.** On the three landmark buildings the glazing sits behind a projecting surround with four reveal jambs and a drip sill, so the sun drops a shadow into the opening. Background rows keep the cheap flat unit.
 - **Mouldings are profiled, not boxes.** Cornices are built from four stepped slabs (bed, fascia, cove, crown), and flat roofs carry AC units, vents, water tanks and antennas for a busier silhouette.
-- **Materials carry dirt and relief.** Wall paints blend a seeded grime/AO sheet and the paving/walls bake a height-gradient into their normal maps (three ignores bumpMap when normalMap exists), so stone, grout and plaster read as surfaces rather than decals. Glass has stronger clearcoat and iridescence.
+- **Materials carry dirt and relief.** Wall paints blend a seeded grime/AO sheet, paving and walls bake a height-gradient into their normal maps (three ignores bumpMap when normalMap exists), and the road/sidewalk run a real parallax-occlusion pass: a 6-step height ray-march displaces the colour, roughness and AO UVs, so paving reads as depth rather than a decal. Glass has stronger clearcoat and iridescence.
 
 ## Audio
 
