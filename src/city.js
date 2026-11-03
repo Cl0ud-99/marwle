@@ -37,11 +37,48 @@ function add(parent, geo, mat, pos, opts = {}) {
   parent.add(m); return m;
 }
 
-function addBuilding(root, b, x, z, rotY) {
+let ACTIVE_COLLIDERS = null;
+function addBuilding(root, b, x, z, rotY, w = 0, d = 0) {
   b.position.set(x, 0, z);
   b.rotation.y = rotY;
   root.add(b);
+  if (ACTIVE_COLLIDERS && w > 0 && d > 0) {
+    ACTIVE_COLLIDERS.push({ kind: 'box', x, z, hx: w/2, hz: d/2, rot: rotY });
+  }
   return b;
+}
+
+/** Push a circle out of every box/circle collider. Two passes handle corners. */
+function resolveCollisions(pos, radius, colliders) {
+  for (let pass = 0; pass < 2; pass++) {
+    for (const c of colliders) {
+      if (c.kind === 'circle') {
+        const dx = pos.x - c.x, dz = pos.z - c.z;
+        const rr = c.r + radius, d2 = dx*dx + dz*dz;
+        if (d2 < rr*rr) {
+          if (d2 < 1e-8) {
+            // dead centre: push towards the street instead of dividing by zero
+            pos.x = c.x + (c.x >= 0 ? -rr : rr);
+          } else {
+            const d = Math.sqrt(d2);
+            pos.x = c.x + dx/d*rr; pos.z = c.z + dz/d*rr;
+          }
+        }
+      } else {
+        const dx = pos.x - c.x, dz = pos.z - c.z;
+        const cs = Math.cos(c.rot), sn = Math.sin(c.rot);
+        const lx = dx*cs + dz*sn, lz = -dx*sn + dz*cs;
+        const hx = c.hx + radius, hz = c.hz + radius;
+        if (Math.abs(lx) >= hx || Math.abs(lz) >= hz) continue;
+        const ox = hx - Math.abs(lx), oz = hz - Math.abs(lz);
+        const nlx = ox < oz ? (lx >= 0 ? hx : -hx) : lx;
+        const nlz = ox < oz ? lz : (lz >= 0 ? hz : -hz);
+        pos.x = c.x + nlx*cs - nlz*sn;
+        pos.z = c.z + nlx*sn + nlz*cs;
+      }
+    }
+  }
+  return pos;
 }
 
 
@@ -71,6 +108,8 @@ export function buildCity(scene, renderer) {
   scene.add(root);
 
   const updaters = [];
+  const colliders = [];
+  ACTIVE_COLLIDERS = colliders;
   const pedestrians = [];
   const drones = [];
   const flagUpdaters = [];
@@ -183,20 +222,20 @@ export function buildCity(scene, renderer) {
   const baseDetail = DETAIL.level;
   const heroDetail = baseDetail === 'high' ? 'ultra' : baseDetail;
   setDetail(heroDetail);
-  const fizz = addBuilding(root, createFizzDome(), -16.0, 8.4, leftRot-.13);
-  const dream = addBuilding(root, createDreamTower(), -17.2, -16.5, leftRot-.04);
-  const marwle = addBuilding(root, createMarwleHall(), 16.2, 4.0, rightRot+.18);
+  const fizz = addBuilding(root, createFizzDome(), -16.0, 8.4, leftRot-.13, 12, 12);
+  const dream = addBuilding(root, createDreamTower(), -17.2, -16.5, leftRot-.04, 10, 10);
+  const marwle = addBuilding(root, createMarwleHall(), 16.2, 4.0, rightRot+.18, 12, 10);
   setDetail(baseDetail);
-  const l3 = addBuilding(root, createGenericBuilding({ width:16, depth:10, height:18.5, body:MAT.paint_butter, trim:MAT.paint_coral, accent:MAT.paint_teal, rows:4, cols:5, roof:'garden', seed:13, signTex:TEX.candy, cornerTower:true }), -16.0, -37.5, leftRot);
-  const r2 = addBuilding(root, createGenericBuilding({ width:17, depth:11, height:21, body:MAT.paint_coral, trim:MAT.paint_cream, accent:MAT.paint_blue, rows:5, cols:5, roof:'sundae', seed:24, signTex:TEX.soda, balconyRow:2 }), 16.7, -17.0, rightRot);
-  const l4 = addBuilding(root, createGenericBuilding({ width:18, depth:12, height:23, body:MAT.paint_lavender, trim:MAT.paint_butter, accent:MAT.paint_coral, rows:5, cols:5, roof:'donut', seed:35, signTex:TEX.dream, cornerTower:true }), 17.0, -39.5, rightRot);
-  const l5 = addBuilding(root, createGenericBuilding({ width:18, depth:12, height:25, body:MAT.paint_mint, trim:MAT.paint_coral, accent:MAT.gold, rows:5, cols:5, roof:'ring', seed:46, signTex:TEX.dream }), -17.0, -58.5, leftRot);
-  const r4 = addBuilding(root, createGenericBuilding({ width:18, depth:12, height:24, body:MAT.paint_peach, trim:MAT.paint_cream, accent:MAT.paint_magenta, rows:5, cols:5, roof:'rocket', seed:57, signTex:TEX.candy }), 17.4, -59.5, rightRot);
-  const l6 = addBuilding(root, createGenericBuilding({ width:20, depth:13, height:27, body:MAT.paint_blue, trim:MAT.paint_cream, accent:MAT.paint_butter, rows:6, cols:6, roof:'garden', seed:68, signTex:TEX.soda, cornerTower:true }), -18.2, -84.0, leftRot);
-  const r5 = addBuilding(root, createGenericBuilding({ width:20, depth:13, height:26, body:MAT.paint_rose, trim:MAT.paint_cream, accent:MAT.paint_teal, rows:6, cols:6, roof:'sundae', seed:79, signTex:TEX.candy }), 18.0, -84.5, rightRot);
+  const l3 = addBuilding(root, createGenericBuilding({ width:16, depth:10, height:18.5, body:MAT.paint_butter, trim:MAT.paint_coral, accent:MAT.paint_teal, rows:4, cols:5, roof:'garden', seed:13, signTex:TEX.candy, cornerTower:true }), -16.0, -37.5, leftRot, 16, 10);
+  const r2 = addBuilding(root, createGenericBuilding({ width:17, depth:11, height:21, body:MAT.paint_coral, trim:MAT.paint_cream, accent:MAT.paint_blue, rows:5, cols:5, roof:'sundae', seed:24, signTex:TEX.soda, balconyRow:2 }), 16.7, -17.0, rightRot, 17, 11);
+  const l4 = addBuilding(root, createGenericBuilding({ width:18, depth:12, height:23, body:MAT.paint_lavender, trim:MAT.paint_butter, accent:MAT.paint_coral, rows:5, cols:5, roof:'donut', seed:35, signTex:TEX.dream, cornerTower:true }), 17.0, -39.5, rightRot, 18, 12);
+  const l5 = addBuilding(root, createGenericBuilding({ width:18, depth:12, height:25, body:MAT.paint_mint, trim:MAT.paint_coral, accent:MAT.gold, rows:5, cols:5, roof:'ring', seed:46, signTex:TEX.dream }), -17.0, -58.5, leftRot, 18, 12);
+  const r4 = addBuilding(root, createGenericBuilding({ width:18, depth:12, height:24, body:MAT.paint_peach, trim:MAT.paint_cream, accent:MAT.paint_magenta, rows:5, cols:5, roof:'rocket', seed:57, signTex:TEX.candy }), 17.4, -59.5, rightRot, 18, 12);
+  const l6 = addBuilding(root, createGenericBuilding({ width:20, depth:13, height:27, body:MAT.paint_blue, trim:MAT.paint_cream, accent:MAT.paint_butter, rows:6, cols:6, roof:'garden', seed:68, signTex:TEX.soda, cornerTower:true }), -18.2, -84.0, leftRot, 20, 13);
+  const r5 = addBuilding(root, createGenericBuilding({ width:20, depth:13, height:26, body:MAT.paint_rose, trim:MAT.paint_cream, accent:MAT.paint_teal, rows:6, cols:6, roof:'sundae', seed:79, signTex:TEX.candy }), 18.0, -84.5, rightRot, 20, 13);
   // near-camera framing blocks: the street should feel embedded in a city, not a diorama
-  const fgL = addBuilding(root, createGenericBuilding({ width:12, depth:11, height:12.5, body:MAT.paint_rose, trim:MAT.paint_cream, accent:MAT.paint_butter, rows:2, cols:3, roof:'garden', seed:91, signTex:null }), -15.2, 29.0, leftRot-.08);
-  const fgR = addBuilding(root, createGenericBuilding({ width:11, depth:10, height:10.8, body:MAT.paint_teal, trim:MAT.paint_cream, accent:MAT.paint_coral, rows:2, cols:3, roof:'garden', seed:93, signTex:null }), 15.0, 31.0, rightRot+.06);
+  const fgL = addBuilding(root, createGenericBuilding({ width:12, depth:11, height:12.5, body:MAT.paint_rose, trim:MAT.paint_cream, accent:MAT.paint_butter, rows:2, cols:3, roof:'garden', seed:91, signTex:null }), -15.2, 29.0, leftRot-.08, 12, 11);
+  const fgR = addBuilding(root, createGenericBuilding({ width:11, depth:10, height:10.8, body:MAT.paint_teal, trim:MAT.paint_cream, accent:MAT.paint_coral, rows:2, cols:3, roof:'garden', seed:93, signTex:null }), 15.0, 31.0, rightRot+.06, 11, 10);
   // outer city blocks visible beyond the parade facades
   for (let i=0;i<10;i++) {
     const side = i%2 ? 1 : -1;
@@ -204,7 +243,7 @@ export function buildCity(scene, renderer) {
     const w = 18 + (i%3)*6;
     const h = 8 + (i%5)*4.5;
     const b = createGenericBuilding({ width:w, depth:14, height:h, body:[MAT.paint_pink,MAT.paint_lavender,MAT.paint_butter,MAT.paint_aqua,MAT.paint_coral][i%5], trim:MAT.paint_cream, accent:MAT.paint_teal, rows:1, cols:4, roof:'garden', seed:120+i, signTex:null });
-    addBuilding(root, b, side*(27 + (i%3)*7), z, side<0?leftRot:rightRot);
+    addBuilding(root, b, side*(27 + (i%3)*7), z, side<0?leftRot:rightRot, w, 14);
   }
 
   // vertical blade sign near the left dome, like a beacon for the street
@@ -241,60 +280,62 @@ export function buildCity(scene, renderer) {
   // lamp posts
   const lampPositions = [[-5.9,15],[-5.9,-3],[-5.9,-21],[-5.9,-40],[-5.9,-58],[5.9,10],[5.9,-8],[5.9,-26],[5.9,-45],[5.9,-64]];
   lampPositions.forEach(([x,z],i)=>{
-    const l=createLamp(100+i, i%3===0?7.8:6.8); l.position.set(x,.13,z); l.rotation.y=x<0?0:Math.PI; root.add(l);
+    const l=createLamp(100+i, i%3===0?7.8:6.8); l.position.set(x,.13,z); l.rotation.y=x<0?0:Math.PI; root.add(l); colliders.push({kind:'circle',x,z,r:.3});
   });
   // bollards
   const bollards=[];
-  for(let z=19;z>-88;z-=2.8){ if(z%8.4<2.8) { bollards.push({x:-6.1,y:.15,z,scale:1}); bollards.push({x:6.1,y:.15,z,scale:1}); } }
+  for(let z=19;z>-88;z-=2.8){ if(z%8.4<2.8) { bollards.push({x:-6.1,y:.15,z,scale:1}); bollards.push({x:6.1,y:.15,z,scale:1}); colliders.push({kind:'circle',x:-6.1,z,r:.2}); colliders.push({kind:'circle',x:6.1,z,r:.2}); } }
   const bmat=MAT.darkMetal;
   root.add(makeInstanced(new THREE.CylinderGeometry(.13,.17,.85,12), bmat, bollards, true, true));
   root.add(makeInstanced(torus(.14,.025,5,16), MAT.gold, bollards.map(b=>({x:b.x,y:b.y+.55,z:b.z,rot:[Math.PI/2,0,0]})), false, false));
   // trees and planters
   const treePositions = [[-8.2,3.0,'pink',1.15],[-8.0,-27.5,'palm',1.0],[-8.4,-48.0,'puff',1.1],[8.0,16.0,'palm',.95],[8.2,-3.0,'pink',1.15],[8.0,-34.0,'palm',1.05],[8.2,-54.0,'puff',.95],[-8.0,10.5,'puff',.75]];
-  treePositions.forEach(([x,z,kind,s],i)=>{ const t=createTree(300+i,kind,s); t.position.set(x,.12,z); t.rotation.y=(i*.9)%TAU; root.add(t); const sh=contactShadow(3.2*s,3.2*s,.27); sh.position.set(x,.135,z); root.add(sh); });
-  for (const [x,z,s] of [[-5.9,9,1.0],[5.9,0,.85],[-5.9,-33,1.0],[5.9,-55,.9],[-7.6,-68,1.2],[7.6,-68,1.2]]) { const p=createShrubPlanter(x*17+31,s); p.position.set(x,.13,z); root.add(p); }
+  treePositions.forEach(([x,z,kind,s],i)=>{ const t=createTree(300+i,kind,s); t.position.set(x,.12,z); t.rotation.y=(i*.9)%TAU; root.add(t); colliders.push({kind:'circle',x,z,r:.36*s}); const sh=contactShadow(3.2*s,3.2*s,.27); sh.position.set(x,.135,z); root.add(sh); });
+  for (const [x,z,s] of [[-5.9,9,1.0],[5.9,0,.85],[-5.9,-33,1.0],[5.9,-55,.9],[-7.6,-68,1.2],[7.6,-68,1.2]]) { const p=createShrubPlanter(x*17+31,s); p.position.set(x,.13,z); root.add(p); colliders.push({kind:'circle',x,z,r:.8*s}); }
   // benches
-  for(const [x,z,a] of [[-8.8,6.8,Math.PI/2],[-8.9,-30,Math.PI/2],[8.8,5.5,-Math.PI/2],[8.9,-30.5,-Math.PI/2]]) { const b=createBench(300+x*3+z); b.position.set(x,.15,z); b.rotation.y=a; root.add(b); }
+  for(const [x,z,a] of [[-8.8,6.8,Math.PI/2],[-8.9,-30,Math.PI/2],[8.8,5.5,-Math.PI/2],[8.9,-30.5,-Math.PI/2]]) { const b=createBench(300+x*3+z); b.position.set(x,.15,z); b.rotation.y=a; root.add(b); colliders.push({kind:'box',x,z,hx:.95,hz:.5,rot:a}); }
   // cafe life under the right awning
-  const cafe1=createCafeSet(12, MAT.awningBlue); cafe1.position.set(8.6,.14,11.0); root.add(cafe1);
-  const cafe2=createCafeSet(14, MAT.awningMint); cafe2.position.set(8.7,.14,-13.0); root.add(cafe2);
+  const cafe1=createCafeSet(12, MAT.awningBlue); cafe1.position.set(8.6,.14,11.0); root.add(cafe1); colliders.push({kind:'circle',x:8.6,z:11.0,r:1.5});
+  const cafe2=createCafeSet(14, MAT.awningMint); cafe2.position.set(8.7,.14,-13.0); root.add(cafe2); colliders.push({kind:'circle',x:8.7,z:-13.0,r:1.5});
   // planters and flower tubs along the promenade
   for (const [px,pz,s] of [[-7.6,11.5,1.0],[7.6,10.0,.85],[-7.7,-18.0,.9],[7.7,-34.0,1.1],[-7.6,-52.0,.9],[7.6,-58.0,.8],[-8.8,-78.0,1.1],[8.8,-82.0,1.0]]) {
-    const pl=createShrubPlanter(870+Math.round(px*7+pz),s); pl.position.set(px,.14,pz); root.add(pl);
+    const pl=createShrubPlanter(870+Math.round(px*7+pz),s); pl.position.set(px,.14,pz); root.add(pl); colliders.push({kind:'circle',x:px,z:pz,r:.85*s});
   }
   // cars parked curbside
-  const car1=createCar('#e33b4c',1); car1.position.set(-4.1,.02,10.8); car1.rotation.y=Math.PI; root.add(car1);
-  const car2=createCar('#f0b948',2); car2.position.set(4.0,.02,-35.0); car2.rotation.y=0; root.add(car2);
-  const car3=createCar('#2d94c8',3); car3.position.set(-3.9,.02,-47.0); car3.rotation.y=Math.PI; root.add(car3);
-  const car4=createCar('#ef9d3f',4); car4.position.set(-4.5,.02,29.0); car4.rotation.y=Math.PI+.04; root.add(car4);
-  const sc3=createScooter('#e4b13c'); sc3.position.set(8.9,.13,28.0); sc3.rotation.y=-.1; root.add(sc3);
+  const car1=createCar('#e33b4c',1); car1.position.set(-4.1,.02,10.8); car1.rotation.y=Math.PI; root.add(car1); colliders.push({kind:'box',x:-4.1,z:10.8,hx:.95,hz:2.2,rot:Math.PI});
+  const car2=createCar('#f0b948',2); car2.position.set(4.0,.02,-35.0); car2.rotation.y=0; root.add(car2); colliders.push({kind:'box',x:4.0,z:-35.0,hx:.95,hz:2.2,rot:0});
+  const car3=createCar('#2d94c8',3); car3.position.set(-3.9,.02,-47.0); car3.rotation.y=Math.PI; root.add(car3); colliders.push({kind:'box',x:-3.9,z:-47.0,hx:.95,hz:2.2,rot:Math.PI});
+  const car4=createCar('#ef9d3f',4); car4.position.set(-4.5,.02,29.0); car4.rotation.y=Math.PI+.04; root.add(car4); colliders.push({kind:'box',x:-4.5,z:29.0,hx:.95,hz:2.2,rot:Math.PI+.04});
+  const sc3=createScooter('#e4b13c'); sc3.position.set(8.9,.13,28.0); sc3.rotation.y=-.1; root.add(sc3); colliders.push({kind:'circle',x:8.9,z:28.0,r:.45});
   const cart = createCandyCart();
-  cart.group.position.set(-4.25,.03,15.2); cart.group.rotation.y=.10; root.add(cart.group); markDynamic(cart.group);
+  cart.group.position.set(-4.25,.03,15.2); cart.group.rotation.y=.10; root.add(cart.group); colliders.push({kind:'box',x:-4.25,z:15.2,hx:1.45,hz:1.1,rot:.10}); markDynamic(cart.group);
   updaters.push(t=>{ cart.balloons.forEach((b,i)=>{
     // absolute offset from the authored height: frame-rate independent and stable under freeze
     b.position.y = b.userData.baseY + Math.sin(t*1.2+i*1.1)*.035;
     b.rotation.z = Math.sin(t*.7+i)*.05;
   }); });
   // scooters
-  const sc1=createScooter('#20b4b7'); sc1.position.set(8.9,.13,7.0); sc1.rotation.y=.2; root.add(sc1);
-  const sc2=createScooter('#e45c70'); sc2.position.set(-8.9,.13,-24.0); sc2.rotation.y=Math.PI-.15; root.add(sc2);
+  const sc1=createScooter('#20b4b7'); sc1.position.set(8.9,.13,7.0); sc1.rotation.y=.2; root.add(sc1); colliders.push({kind:'circle',x:8.9,z:7.0,r:.45});
+  const sc2=createScooter('#e45c70'); sc2.position.set(-8.9,.13,-24.0); sc2.rotation.y=Math.PI-.15; root.add(sc2); colliders.push({kind:'circle',x:-8.9,z:-24.0,r:.45});
   // vending machine / newspaper boxes
   for (let i=0;i<2;i++){
     const vg=new THREE.Group(); add(vg,rBox(.9,1.7,.65,.08,3), i?MAT.paint_blue:MAT.paint_coral,[0,.85,0]);
     add(vg,rBox(.7,1.1,.03,.02), MAT.glassWarm,[0,1.02,.34]);
     add(vg,plane(.62,.8), new THREE.MeshBasicMaterial({map:i?TEX.poster2:TEX.poster1, toneMapped:false, color:new THREE.Color().setScalar(.9)}),[0,1.02,.36],{cast:false,receive:false}).userData.noMerge=true;
-    vg.position.set(9.6,.14, i? -6.5: 2.0); vg.rotation.y=-.15; root.add(vg);
+    vg.position.set(9.6,.14, i? -6.5: 2.0); vg.rotation.y=-.15; root.add(vg); colliders.push({kind:'box',x:9.6,z:i?-6.5:2.0,hx:.5,hz:.4,rot:-.15});
   }
 
   // fountain and its court
-  const fountain=createFountain(); fountain.group.position.set(0,0,-72); root.add(fountain.group); markDynamic(fountain.group); updaters.push(t=>fountain.update(t));
+  const fountain=createFountain(); fountain.group.position.set(0,0,-72); root.add(fountain.group); colliders.push({kind:'circle',x:0,z:-72,r:8.8}); markDynamic(fountain.group); updaters.push(t=>fountain.update(t));
   for(let i=0;i<6;i++){
     const a = Math.PI + i/6*TAU*0.58;
     if (Math.sin(a) > -0.05) continue;
     const pl=new THREE.Group(); add(pl,cyl(.7,.9,.55,20),MAT.terracotta,[0,.28,0]); add(pl,sphere(.9,16,12),i%2?MAT.leafPink:MAT.leafMid,[0,1.0,0]).scale.set(1.2,.7,1.2);
     for(let j=0;j<7;j++){const aa=j/7*TAU; add(pl,sphere(.07,8,6),j%2?MAT.flowerPink:MAT.flowerGold,[Math.cos(aa)*.65,.95+Math.sin(aa)*.4,.65*Math.sin(aa)]);}
     pl.position.set(Math.cos(a)*16.5,.12,-72+Math.sin(a)*16.5); root.add(pl);
+    colliders.push({kind:'circle',x:Math.cos(a)*16.5,z:-72+Math.sin(a)*16.5,r:.9});
     const b=createBench(500+i); b.position.set(Math.cos(a+.16)*18.5,.13,-72+Math.sin(a+.16)*18.5); b.rotation.y=-a+Math.PI/2; root.add(b);
+    colliders.push({kind:'box',x:Math.cos(a+.16)*18.5,z:-72+Math.sin(a+.16)*18.5,hx:.95,hz:.5,rot:-a+Math.PI/2});
   }
 
   // gate bridge and skyline
@@ -328,29 +369,47 @@ export function buildCity(scene, renderer) {
 
   // pedestrians
   const peopleSpecs = [
-    [9.0,.14,13.0,-1,'#ff6e76','#294c68',1.15],[10.9,.14,7.0,-1,'#f6c948','#8a5b85',.95],
-    [-9.2,.14,4.0,1,'#5dc6c0','#e2ceb1',1.05],[-10.9,.14,-12.0,1,'#b49ae8','#38445d',.9],
-    [9.6,.14,-20.0,-1,'#ff9db7','#5b3d57',1.1],[-9.6,.14,-40.0,-1,'#6faee8','#f1e2c8',1.0],
-    [10.8,.14,-55.0,1,'#ffb35c','#3c5b64',1.0],[-9.0,.14,16.5,-1,'#8fdcad','#8d4f58',.9]
+    [7.2,.14,13.0,-1,'#ff6e76','#294c68',1.15],[8.2,.14,7.0,-1,'#f6c948','#8a5b85',.95],
+    [-7.2,.14,4.0,1,'#5dc6c0','#e2ceb1',1.05],[-8.2,.14,-12.0,1,'#b49ae8','#38445d',.9],
+    [7.6,.14,-20.0,-1,'#ff9db7','#5b3d57',1.1],[-7.6,.14,-40.0,-1,'#6faee8','#f1e2c8',1.0],
+    [8.2,.14,-55.0,1,'#ffb35c','#3c5b64',1.0],[-7.2,.14,16.5,-1,'#8fdcad','#8d4f58',.9]
   ];
   peopleSpecs.forEach(([x,y,z,dir,c1,c2,speed],i)=>{
     // the model is authored facing +Z, so rotation 0 means "walking towards +Z"
-    const p=createPerson(900+i,[c1,c2]); p.position.set(x,y,z); p.rotation.y=dir>0?0:Math.PI; p.userData.phase=i*1.7; p.userData.dir=dir; p.userData.speed=speed; p.userData.startZ=z; p.userData.walkZ=z;
+    const p=createPerson(900+i,[c1,c2]); p.position.set(x,y,z); p.rotation.y=dir>0?0:Math.PI; p.userData.phase=i*1.7; p.userData.dir=dir; p.userData.speed=speed; p.userData.startZ=z; p.userData.walkZ=z; p.userData.laneX=x;
     // moving props are excluded from the baked shadow map, so each one carries
     // its own soft ground contact patch instead of a frozen long shadow
     const cs=contactShadow(1.7,1.7,.34); cs.position.y=.012; p.add(cs);
     markDynamic(p); root.add(p); pedestrians.push(p);
   });
   updaters.push(t=>{
+    // advance along the lane, pull back towards it gently, then push out of
+    // buildings, benches, planters and the other walkers
     pedestrians.forEach((p,i)=>{
       const dir=p.userData.dir, speed=p.userData.speed;
       let z=p.userData.startZ + dir*t*speed*1.6;
       const span=95;
       z = -55 + ((z+55)%span+span)%span;
-      p.position.z=z;
-      p.rotation.y = dir>0?0:Math.PI;
-      animatePerson(p,t,speed,dir);
+      p.position.x += (p.userData.laneX - p.position.x) * .035;
+      p.position.z = z;
+      resolveCollisions(p.position, .28, colliders);
     });
+    for (let i=0;i<pedestrians.length;i++) {
+      const a=pedestrians[i];
+      for (let j=i+1;j<pedestrians.length;j++) {
+        const b=pedestrians[j];
+        const dx=b.position.x-a.position.x, dz=b.position.z-a.position.z;
+        const rr=.62, d2=dx*dx+dz*dz;
+        if (d2 < rr*rr && d2 > 1e-6) {
+          const d=Math.sqrt(d2), push=(rr-d)*.5;
+          a.position.x -= dx/d*push; a.position.z -= dz/d*push;
+          b.position.x += dx/d*push; b.position.z += dz/d*push;
+        }
+      }
+      resolveCollisions(a.position, .28, colliders);
+      a.rotation.y = a.userData.dir>0?0:Math.PI;
+      animatePerson(a, t, a.userData.speed, a.userData.dir);
+    }
   });
 
   // drones
@@ -471,5 +530,9 @@ export function buildCity(scene, renderer) {
     // sky tram handles itself
   }
 
-  return { root, water, fountain, pedestrians, mergeInfo, dynamicInfo, update };
+  ACTIVE_COLLIDERS = null;
+  return {
+    root, water, fountain, pedestrians, mergeInfo, dynamicInfo, update, colliders,
+    resolveCollisions: (pos, radius) => resolveCollisions(pos, radius, colliders)
+  };
 }

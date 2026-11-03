@@ -267,7 +267,9 @@ async function boot() {
     player.pos.addScaledVector(player.vel, dt);
     // soft street walls; the plaza opens up past the crosswalk
     if (player.pos.z > -57) {
-      player.pos.x = THREE.MathUtils.clamp(player.pos.x, -5.8, 5.8);
+      // the avenue is open up to the shopfronts; the colliders below do the
+      // real blocking, this is only a safety net behind the facades
+      player.pos.x = THREE.MathUtils.clamp(player.pos.x, -9.55, 9.55);
     } else if (player.pos.z < -58) {
       player.pos.x = THREE.MathUtils.clamp(player.pos.x, -18.5, 18.5);
       const dx=player.pos.x, dz=player.pos.z+72;
@@ -275,6 +277,23 @@ async function boot() {
       if (d < 9.5 && d > .01) { player.pos.x = dx/d*9.5; player.pos.z = -72 + dz/d*9.5; }
     }
     player.pos.z = THREE.MathUtils.clamp(player.pos.z, -95, 20.5);
+
+    // ── volume collision ──────────────────────────────────────
+    if (city.resolveCollisions) city.resolveCollisions(player.pos, .38);
+    for (const p of city.pedestrians) {
+      if (p.visible === false) continue;
+      const dx = player.pos.x - p.position.x, dz = player.pos.z - p.position.z;
+      const rr = .38 + .3, d2 = dx*dx + dz*dz;
+      if (d2 < rr*rr) {
+        if (d2 < 1e-6) {
+          player.pos.x = p.position.x + rr;
+        } else {
+          const d = Math.sqrt(d2);
+          player.pos.x = p.position.x + dx/d*rr;
+          player.pos.z = p.position.z + dz/d*rr;
+        }
+      }
+    }
 
     // ── jump / gravity ────────────────────────────────────────
     if (!player.grounded) {
@@ -397,7 +416,7 @@ async function boot() {
 
   // initial data for debugging and external capture tools
   window.__MARWLE = {
-    THREE, scene, camera, renderer, composer: post.composer, post, sky, city, audio, SHOTS,
+    THREE, scene, camera, renderer, composer: post.composer, post, sky, city, audio, SHOTS, player,
     setShot:(name)=>{ enterPhoto(); applyShot(name); },
     setMode:(m)=>{ if(m==='explore')enterExplore(); else if(m==='cinema')startCinema(); else if(m==='photo')enterPhoto(); },
     get mode(){return mode;},

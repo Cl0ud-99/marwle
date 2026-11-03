@@ -68,6 +68,7 @@ Details worth reading:
 - **Reflection is masked, not global.** One mirror RT drives both the water lane and the plaza pool, plus the damp road sheen. The shader masks by world position so asphalt stays matte and the canal reads as wet.
 - **The whole static city is merged by material.** Hundreds of authored meshes collapse into roughly sixty draw calls; the remaining draw calls are moving characters, sprites, signs and transparent glass.
 - **Moving props are merged in local space.** A pedestrian, cart, fountain or drone keeps one root transform for animation while its bodywork collapses into a handful of per-material meshes.
+- **Collision is volumetric, not a rail.** The walk camera and every pedestrian resolve their radius against building footprints, cars, the candy cart, benches, planters, lamps, bollards and the fountain. NPC lanes sit on the sidewalk and are gently pulled back to them, so walkers slide around obstacles instead of clipping through walls.
 - **Light has a second bounce.** A warm directional fill lifts undersides and awnings, 520 additive dust motes drift through the boulevard as a cheap volumetric cue, and the sun-ray pass is slightly stronger.
 - **Moving props do not bake shadows.** They are excluded from the frozen sun map and carry a soft contact patch instead, so nobody leaves a shadow behind.
 - **Canopies use alpha cards.** Puff trees keep a few sphere clumps for volume and add 26 alpha-tested leaf cards per tree, merged into one mesh per tree; the cards opt out of the baked shadow map so they do not leave square shadows.
