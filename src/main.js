@@ -120,6 +120,7 @@ async function boot() {
 
   setLoad(.88, 'SETTING THE CAMERA');
   const post = createPost(renderer, scene, camera, { msaa: QUALITY.msaa, bloom: QUALITY.bloom });
+  if (params.get('tonemap') === 'aces') post.final.uniforms.uAgx.value = 0;
   const audio = createAudio();
 
   // ── runtime quality switch (walk ↔ cinematic ↔ photo) ──────

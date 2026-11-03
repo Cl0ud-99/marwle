@@ -62,6 +62,7 @@ Details worth reading:
 
 - **The shadow map is baked once.** The architecture is static, so the sun shadow map is rendered during the first frame and then frozen. Its resolution follows the quality preset (1024² draft, 3072² standard, 4096² cinematic/photo), and the ortho box is trimmed to the playable corridor.
 - **Planar reflections are throttled and layer-culled.** The mirror camera renders only the static layer; the reflection scale and cadence follow the quality preset. Moving props live on layer 1 and stay out of the reflection pass entirely, which removes a large slice of draw calls.
+- **The grade is AgX.** The final pass uses the Filament/Blender AgX curve with a re-tuned exposure, saturation and contrast, so marquee bulbs and sun glints roll off instead of clipping to white. `?tonemap=aces` restores the older ACES curve for comparison.
 - **Photo mode is a different renderer.** `?shot=` and the `P` key switch to the photo preset: higher device pixel ratio, 4096² shadows, full-rate reflections, GTAO and a subtle depth-of-field pass focused per composed shot, so stills are much cleaner than the walk view.
 - **The shader rejects early.** The mirror plane is much larger than the area that can ever be wet, so the fragment shader discards anything outside the canal and pool bounds before it runs the noise and reflection taps.
 - **Reflection is masked, not global.** One mirror RT drives both the water lane and the plaza pool, plus the damp road sheen. The shader masks by world position so asphalt stays matte and the canal reads as wet.
@@ -132,6 +133,7 @@ No server is needed for the single file; every image, font and audio graph is em
 | `?detail=low` | Coarser geometry tessellation |
 | `?detail=ultra` | Higher geometry tessellation for close-ups |
 | `?cinema=1` | Start straight into the cinematic camera |
+| `?tonemap=aces` | Use the older ACES curve instead of AgX |
 
 Screenshots shown here were captured with `?shot=…&ui=0&freeze=1&t=10`.
 

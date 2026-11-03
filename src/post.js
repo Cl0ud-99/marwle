@@ -50,11 +50,12 @@ const FinalShader = {
     tDiffuse: { value: null },
     uTime: { value: 0 },
     uResolution: { value: new THREE.Vector2(1920,1080) },
-    uExposure: { value: .74 },
+    uExposure: { value: .88 },
+    uAgx: { value: 1 },
     uVignette: { value: .30 },
     uGrain: { value: .022 },
-    uSaturation: { value: 1.16 },
-    uContrast: { value: 1.08 },
+    uSaturation: { value: 1.36 },
+    uContrast: { value: 1.10 },
     uFade: { value: 1.0 }
   },
   vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
@@ -63,6 +64,7 @@ const FinalShader = {
     uniform float uTime;
     uniform vec2 uResolution;
     uniform float uExposure;
+    uniform float uAgx;
     uniform float uVignette;
     uniform float uGrain;
     uniform float uSaturation;
@@ -74,6 +76,35 @@ const FinalShader = {
     vec3 aces(vec3 x){
       const float a=2.51,b=.03,c=2.43,d=.59,e=.14;
       return clamp((x*(a*x+b))/(x*(c*x+d)+e),0.0,1.0);
+    }
+    const mat3 SRGB_TO_REC2020 = mat3(
+      vec3(0.6274,0.0691,0.0164), vec3(0.3293,0.9195,0.0880), vec3(0.0433,0.0113,0.8956));
+    const mat3 REC2020_TO_SRGB = mat3(
+      vec3(1.6605,-0.1246,-0.0182), vec3(-0.5876,1.1329,-0.1006), vec3(-0.0728,-0.0083,1.1187));
+    vec3 agxContrast(vec3 x){
+      vec3 x2=x*x, x4=x2*x2;
+      return 15.5*x4*x2 - 40.14*x4*x + 31.96*x4 - 6.868*x2*x + 0.4298*x2 + 0.1191*x - 0.00232;
+    }
+    vec3 agx(vec3 color){
+      const mat3 inset = mat3(
+        vec3(0.856627153315983,0.137318972929847,0.11189821299995),
+        vec3(0.0951212405381588,0.761241990602591,0.0767994186031903),
+        vec3(0.0482516061458583,0.101439036467562,0.811302368396859));
+      const mat3 outset = mat3(
+        vec3(1.1271005818144368,-0.1413297634984383,-0.14132976349843826),
+        vec3(-0.11060664309660323,1.157823702216272,-0.11060664309660294),
+        vec3(-0.016493938717834573,-0.016493938717834257,1.2519364065950405));
+      color = SRGB_TO_REC2020 * color;
+      color = inset * color;
+      color = max(color, 1e-10);
+      color = log2(color);
+      color = (color + 12.47393) / (4.026069 + 12.47393);
+      color = clamp(color, 0.0, 1.0);
+      color = agxContrast(color);
+      color = outset * color;
+      color = pow(max(vec3(0.0), color), vec3(2.2));
+      color = REC2020_TO_SRGB * color;
+      return clamp(color, 0.0, 1.0);
     }
     vec3 srgb(vec3 c){
       return mix(c*12.92, 1.055*pow(max(c,vec3(0.0)),vec3(1.0/2.4))-.055, step(vec3(.0031308),c));
@@ -94,7 +125,7 @@ const FinalShader = {
       float luma = dot(col, vec3(.2126,.7152,.0722));
       col += vec3(-.003,.005,.008) * (1.0-smoothstep(0.0,.26,luma));
       col *= mix(vec3(1.0), vec3(1.035,1.01,.965), smoothstep(.4,1.2,luma));
-      col = aces(col);
+      col = mix(aces(col), agx(col), uAgx);
       col = mix(vec3(dot(col,vec3(.2126,.7152,.0722))), col, uSaturation);
       col = clamp((col)*uContrast,0.0,1.0);
       col = srgb(col);
