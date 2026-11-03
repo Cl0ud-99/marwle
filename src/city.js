@@ -761,16 +761,8 @@ export function buildCity(scene, renderer) {
   const lightSpecs = [[-8.8,3.5,8,0xffb46d],[8.8,3.2,5,0xffc07b],[-8.8,3.0,-36,0xffd391],[8.8,3.0,-46,0x9ef5e7]];
   for(const [x,y,z,c] of lightSpecs){ const pl=new THREE.PointLight(c, 2.6, 7, 2); pl.position.set(x,y,z); root.add(pl); }
 
-  // background fog / haze plane behind skyline handled by scene fog; add low mist planes
-  const mistTex=canvasTexture(512,256,(ctx,w,h)=>{
-    const g=ctx.createLinearGradient(0,0,w,0);
-    g.addColorStop(0,'rgba(232,248,255,0)');g.addColorStop(.3,'rgba(229,246,255,.24)');g.addColorStop(.7,'rgba(244,243,225,.20)');g.addColorStop(1,'rgba(255,246,226,0)');
-    ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
-  },{clamp:true});
-  for(let i=0;i<6;i++){
-    const m=new THREE.Mesh(new THREE.PlaneGeometry(90,14), new THREE.MeshBasicMaterial({map:mistTex,transparent:true,opacity:.16,depthWrite:false,side:THREE.DoubleSide,toneMapped:false}));
-    m.position.set(0,2+i*1.6,-100-i*10); m.userData.noMerge=true; root.add(m);
-  }
+  // Atmospheric haze is handled by scene fog + dust motes. The old vertical
+  // mist sheets read as a translucent cloth across the avenue, so they are gone.
 
   // contact shadow under building bases to seat them in the street
   for(const side of [-1,1]) { const s=contactShadow(5,70,.26); s.position.set(side*7.4,.03,-30); s.rotation.z=Math.PI/2; root.add(s); }
