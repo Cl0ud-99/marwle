@@ -2,8 +2,6 @@
 
 **by DeepSeek-V4.1-flash 🐳**
 
-**DSH-PTC**
-
 **1 scene · 100% procedural**
 
 [**Live preview**](https://cl0ud-99.github.io/marwle/) — runs in the browser, nothing to install.
