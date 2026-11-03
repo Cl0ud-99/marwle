@@ -47,6 +47,20 @@ function createClockTower() {
   const face = clockFaceTexture();
   add(g, rBox(12, 7, 12, .8, 4), MAT.paint_cream, [0, 3.5, 0]);
   add(g, rBox(13, .6, 13, .18, 2), MAT.paint_coral, [0, 7.2, 0]);
+  // street-facing gatehouse: arched glass door, gold surround, lit side windows
+  for (const sz of [-1, 1]) {
+    const z = sz * 6.06;
+    add(g, plane(4.6, 5.4), MAT.glassDark, [0, 2.8, z], { rot:[0, sz < 0 ? Math.PI : 0, 0], cast:false, receive:false });
+    add(g, rBox(5.4, .3, .35, .06, 2), MAT.gold, [0, 5.72, sz * 6.08]);
+    add(g, rBox(.3, 5.4, .35, .06, 2), MAT.gold, [-2.6, 2.8, sz * 6.08]);
+    add(g, rBox(.3, 5.4, .35, .06, 2), MAT.gold, [2.6, 2.8, sz * 6.08]);
+    for (const x of [-4.3, 4.3]) {
+      add(g, plane(1.25, 1.7), MAT.glassWarm, [x, 3.5, sz * 6.05], { rot:[0, sz < 0 ? Math.PI : 0, 0], cast:false, receive:false });
+      add(g, rBox(1.45, .14, .22, .03, 2), MAT.gold, [x, 4.4, sz * 6.07]);
+      add(g, rBox(1.45, .14, .22, .03, 2), MAT.gold, [x, 2.6, sz * 6.07]);
+    }
+    add(g, rBox(9.0, .18, 1.1, .04, 2), MAT.paint_coral, [0, .25, sz * 6.5]);
+  }
   add(g, cyl(4.6, 5.8, 16, 48), MAT.paint_teal, [0, 15.5, 0]);
   for (let i = 0; i < 4; i++) add(g, torus(5.0 + i * .15, .10, 8, 48), MAT.gold, [0, 9 + i * 3.2, 0], { rot:[Math.PI/2, 0, 0] });
   add(g, rBox(9, 7, 9, .6, 3), MAT.paint_cream, [0, 27, 0]);
@@ -406,8 +420,9 @@ export function buildCity(scene, renderer) {
 
   // ── new district landmarks ────────────────────────────────
   const clockTower = createClockTower();
-  clockTower.position.set(-9.5, 0, -214); root.add(clockTower);
-  colliders.push({ kind:'box', x:-9.5, z:-214, hx:6, hz:6, rot:0 });
+  // the clock tower fills the empty north alley behind the opening spawn
+  clockTower.position.set(0, 0, 44); root.add(clockTower);
+  colliders.push({ kind:'box', x:0, z:44, hx:6, hz:6, rot:0 });
   const candyWheel = createCandyWheel();
   candyWheel.position.set(21, 0, -160); root.add(candyWheel);
   colliders.push({ kind:'circle', x:21, z:-160, r:4.6 });
@@ -572,8 +587,8 @@ export function buildCity(scene, renderer) {
 
   // gate bridge and skyline
   // the open avenue deliberately leads all the way to the fountain court
-  const palace = createSunPalace(); palace.position.set(6.5,0,-214); root.add(palace);
-  colliders.push({ kind:'box', x:6.5, z:-214, hx:9, hz:7, rot:0 });
+  const palace = createSunPalace(); palace.position.set(0,0,-214); root.add(palace);
+  colliders.push({ kind:'box', x:0, z:-214, hx:9, hz:7, rot:0 });
   // grand ending arch
   const arch = new THREE.Group();
   for(const side of [-1,1]){

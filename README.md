@@ -18,7 +18,7 @@ A playable candy-city street: two linked districts on a 300 m boulevard, a mirro
 |---|---|
 | ![title](docs/shots/title.jpg) | ![explore](docs/shots/explore.jpg) |
 | ![fountain](docs/shots/fountain.jpg) | ![water](docs/shots/water.jpg) |
-| ![south district](docs/shots/south.jpg) | |
+| ![south district](docs/shots/south.jpg) | ![north gate](docs/shots/north.jpg) |
 
 ## What it is
 
@@ -67,7 +67,7 @@ Details worth reading:
 - **Photo mode is a different renderer.** `?shot=` and the `P` key switch to the photo preset: higher device pixel ratio, 4096² shadows, full-rate reflections, GTAO and a subtle depth-of-field pass focused per composed shot, so stills are much cleaner than the walk view.
 - **The shader rejects early.** The mirror plane is much larger than the area that can ever be wet, so the fragment shader discards anything outside the canal and pool bounds before it runs the noise and reflection taps.
 - **Reflection is masked, not global.** One mirror RT drives both the water lane and the plaza pool, plus the damp road sheen. The shader masks by world position so asphalt stays matte and the canal reads as wet.
-- **The avenue doubled.** Past the welcome arch the street continues for another ~100 m: eight new storefronts, all with unique names and signs, a clock tower terminus, a candy ferris wheel, eight more parked cars, more carts, scooters, cafés, trees, pennants and 20 pedestrians in total.
+- **The avenue doubled.** Past the welcome arch the street continues for another ~100 m: eight new storefronts, all with unique names and signs, a JOY-faced palace at the south terminus, a candy ferris wheel, eight more parked cars, more carts, scooters, cafés, trees, pennants and 20 pedestrians in total. A gatehouse clock tower fills the empty alley behind the opening spawn, so turning around at the start now has a landmark instead of a bare horizon.
 - **Static geometry is batched by material.** Opaque walls, mouldings and paving collapse into material batches; the remaining draw calls are moving characters, signs, transparent glass and sprites.
 - **Moving props are merged in local space.** A pedestrian, cart, fountain or drone keeps one root transform for animation while its bodywork collapses into a handful of per-material meshes.
 - **Collision is volumetric, not a rail.** The walk camera and every pedestrian resolve their radius against building footprints, cars, the candy cart, benches, planters, lamps, bollards and the fountain. NPC lanes sit on the sidewalk and are gently pulled back to them, so walkers slide around obstacles instead of clipping through walls.
