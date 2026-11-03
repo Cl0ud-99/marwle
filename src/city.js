@@ -675,13 +675,23 @@ export function buildCity(scene, renderer) {
     // buildings, benches, planters and the other walkers
     pedestrians.forEach((p,i)=>{
       const dir=p.userData.dir, speed=p.userData.speed;
-      let z=p.userData.startZ + dir*t*speed*1.6;
       const zMin=p.userData.zMin, zMax=p.userData.zMax;
       const span=zMax-zMin;
-      z = zMin + (((z-zMin)%span)+span)%span;
+      const cycleLen=span*2;
+      const raw = (p.userData.startZ - zMin) + dir*t*speed*1.6;
+      const cycle = ((raw % cycleLen) + cycleLen) % cycleLen;
+      const outward = cycle < span;
+      const z = zMin + (outward ? cycle : cycleLen - cycle);
+      p.userData.walkDir = dir * (outward ? 1 : -1);
+      p.userData.pathZ = z;
       p.position.x += (p.userData.laneX - p.position.x) * .035;
       p.position.z = z;
+      const px = p.position.x;
       resolveCollisions(p.position, .28, colliders);
+      // keep z path-driven and ease the sideways push-out, so a bench or
+      // planter makes the walker sidestep instead of popping along the lane
+      p.position.z = z;
+      p.position.x = px + (p.position.x - px) * .5;
     });
     for (let i=0;i<pedestrians.length;i++) {
       const a=pedestrians[i];
@@ -696,8 +706,9 @@ export function buildCity(scene, renderer) {
         }
       }
       resolveCollisions(a.position, .28, colliders);
-      a.rotation.y = a.userData.dir>0?0:Math.PI;
-      animatePerson(a, t, a.userData.speed, a.userData.dir);
+      a.position.z = a.userData.pathZ;
+      a.rotation.y = a.userData.walkDir>0?0:Math.PI;
+      animatePerson(a, t, a.userData.speed, a.userData.walkDir);
     }
   });
 
