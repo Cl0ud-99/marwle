@@ -781,10 +781,19 @@ export function buildCity(scene, renderer) {
     }
     root.add(cg);
   }
+  // clouds across the whole run: behind the opening, over the mid avenue,
+  // and out over the south extension, plus one high central bank
   cloudBank(-33, 42, -82, 36, 14, 21);
   cloudBank(25, 50, -118, 46, 17, 23);
   cloudBank(-6, 62, -175, 60, 22, 25);
   cloudBank(58, 39, -75, 28, 10, 27);
+  cloudBank(-42, 36, 58, 30, 11, 41);
+  cloudBank(38, 44, 72, 38, 15, 43);
+  cloudBank(-50, 38, -38, 28, 10, 45);
+  cloudBank(46, 46, -52, 34, 12, 47);
+  cloudBank(-48, 50, -148, 42, 15, 49);
+  cloudBank(54, 42, -198, 46, 16, 51);
+  cloudBank(0, 74, -100, 40, 13, 53);
 
   // merge all the static architecture into a small set of draw calls
   const mergeInfo = mergeStatic(root);
