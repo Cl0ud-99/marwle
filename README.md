@@ -69,6 +69,7 @@ Details worth reading:
 - **Moving props are merged in local space.** A pedestrian, cart, fountain or drone keeps one root transform for animation while its bodywork collapses into a handful of per-material meshes.
 - **Light has a second bounce.** A warm directional fill lifts undersides and awnings, 520 additive dust motes drift through the boulevard as a cheap volumetric cue, and the sun-ray pass is slightly stronger.
 - **Moving props do not bake shadows.** They are excluded from the frozen sun map and carry a soft contact patch instead, so nobody leaves a shadow behind.
+- **Canopies use alpha cards.** Puff trees keep a few sphere clumps for volume and add 26 alpha-tested leaf cards per tree, merged into one mesh per tree; the cards opt out of the baked shadow map so they do not leave square shadows.
 - **Only the three landmarks get the ultra tier.** Hero LOD switches tessellation to `ultra` while building Fizz Dome, Dream Tower and Marwle Hall, then drops back to the base tier for the rest of the street.
 - **Hero windows have real depth.** On the three landmark buildings the glazing sits behind a projecting surround with four reveal jambs and a drip sill, so the sun drops a shadow into the opening. Background rows keep the cheap flat unit.
 - **Mouldings are profiled, not boxes.** Cornices are built from four stepped slabs (bed, fascia, cove, crown), and flat roofs carry AC units, vents, water tanks and antennas for a busier silhouette.

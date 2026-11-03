@@ -455,6 +455,8 @@ export function buildCity(scene, renderer) {
     if (!d.userData.dynamic) continue;
     d.traverse(o => { if (o.isMesh) o.castShadow = false; });
   }
+  // alpha-tested cards opt out of the baked map (square card shadows otherwise)
+  root.traverse(o => { if (o.userData.noShadow) o.castShadow = false; });
 
   function billboardArch(tex,w,h){
     const g=new THREE.Group();

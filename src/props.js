@@ -66,6 +66,41 @@ function limb(a, b, r1, r2, mat) {
   return g;
 }
 
+let leafCardTex = null;
+function leafCardTexture() {
+  if (leafCardTex) return leafCardTex;
+  leafCardTex = canvasTexture(128, 128, (ctx, s) => {
+    ctx.clearRect(0, 0, s, s);
+    ctx.fillStyle = '#ffffff';
+    const leaf = (x, y, len, ang, w) => {
+      ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+      ctx.beginPath(); ctx.ellipse(len * .45, 0, len, w, 0, 0, TAU); ctx.fill();
+      ctx.restore();
+    };
+    leaf(56, 64, 30, 0, 9);
+    leaf(52, 52, 24, -.7, 7.5);
+    leaf(54, 76, 24, .7, 7.5);
+    leaf(46, 62, 18, -1.9, 6);
+    leaf(58, 42, 16, -2.6, 5.5);
+  }, { clamp: true });
+  return leafCardTex;
+}
+
+const leafCardMats = new Map();
+function leafCardMaterial(color) {
+  const key = color.getHexString();
+  let mat = leafCardMats.get(key);
+  if (!mat) {
+    mat = new THREE.MeshStandardMaterial({
+      map: leafCardTexture(), color: color.clone(), alphaTest: .45,
+      side: THREE.DoubleSide, roughness: .78, metalness: 0
+    });
+    mat.name = 'leaf-card';
+    leafCardMats.set(key, mat);
+  }
+  return mat;
+}
+
 export function createTree(seed = 1, kind = 'puff', scale = 1) {
   const r = rng(seed);
   const g = new THREE.Group();
@@ -111,6 +146,45 @@ export function createTree(seed = 1, kind = 'puff', scale = 1) {
       const fl = add(g, sphere(.065*scale,6,4), r()>.5?MAT.flowerPink:MAT.flowerGold, [Math.cos(a)*rad*.8, yy+.18, Math.sin(a)*rad*.8], {cast:false});
     }
   }
+
+  // alpha-tested leaf cards break up the spherical silhouette without adding
+  // draw calls per tree: all cards for one tree are merged into one mesh.
+  const cardPos = [], cardNor = [], cardUv = [], cardIdx = [];
+  let cardV = 0;
+  const cards = 26;
+  const up = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < cards; i++) {
+    const a = r() * TAU;
+    const rad = (1.05 + r() * .85) * scale;
+    const cy = h * (.62 + r() * .48);
+    const cx = Math.cos(a) * rad * .95, cz = Math.sin(a) * rad * .95;
+    const n = new THREE.Vector3(Math.cos(a), (r() - .4) * .7, Math.sin(a)).normalize();
+    const t = new THREE.Vector3().crossVectors(up, n).normalize();
+    const b = new THREE.Vector3().crossVectors(n, t).normalize();
+    const w = (.5 + r() * .4) * scale, hh = (.4 + r() * .35) * scale;
+    const c = new THREE.Vector3(cx, cy, cz);
+    const corners = [
+      c.clone().addScaledVector(t, -w/2).addScaledVector(b, -hh/2),
+      c.clone().addScaledVector(t,  w/2).addScaledVector(b, -hh/2),
+      c.clone().addScaledVector(t,  w/2).addScaledVector(b,  hh/2),
+      c.clone().addScaledVector(t, -w/2).addScaledVector(b,  hh/2)
+    ];
+    for (const p of corners) { cardPos.push(p.x, p.y, p.z); cardNor.push(n.x, n.y, n.z); }
+    cardUv.push(0,0, 1,0, 1,1, 0,1);
+    cardIdx.push(cardV, cardV+1, cardV+2, cardV, cardV+2, cardV+3);
+    cardV += 4;
+  }
+  const cardGeo = new THREE.BufferGeometry();
+  cardGeo.setAttribute('position', new THREE.Float32BufferAttribute(cardPos, 3));
+  cardGeo.setAttribute('normal', new THREE.Float32BufferAttribute(cardNor, 3));
+  cardGeo.setAttribute('uv', new THREE.Float32BufferAttribute(cardUv, 2));
+  cardGeo.setIndex(cardIdx);
+  const cardMesh = new THREE.Mesh(cardGeo, leafCardMaterial(palette[0].color));
+  cardMesh.castShadow = false;
+  cardMesh.receiveShadow = true;
+  cardMesh.userData.noMerge = true;
+  cardMesh.userData.noShadow = true;
+  g.add(cardMesh);
   return g;
 }
 
