@@ -8,7 +8,7 @@ export const PRESETS = {
     bloom: .18, ao: false, aoIntensity: 0,
   },
   standard: {
-    dpr: 1.35, shadowMap: 2048, msaa: 2,
+    dpr: 1.35, shadowMap: 3072, msaa: 2,
     reflectionScale: 1, reflectEvery: 3,
     bloom: .22, ao: false, aoIntensity: 0,
   },

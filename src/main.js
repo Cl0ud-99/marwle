@@ -90,10 +90,10 @@ async function boot() {
   sun.target.position.copy(sunTarget);
   sun.castShadow = true;
   sun.shadow.mapSize.set(QUALITY.shadowMap, QUALITY.shadowMap);
-  sun.shadow.camera.left = -65;
-  sun.shadow.camera.right = 65;
-  sun.shadow.camera.top = 82;
-  sun.shadow.camera.bottom = -82;
+  sun.shadow.camera.left = -60;
+  sun.shadow.camera.right = 60;
+  sun.shadow.camera.top = 78;
+  sun.shadow.camera.bottom = -78;
   sun.shadow.camera.near = 10;
   sun.shadow.camera.far = 300;
   sun.shadow.bias = -.00018;

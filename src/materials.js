@@ -88,6 +88,65 @@ function wallAOTexture() {
   }, { linear: true, repeat: [2.2, 2.2] });
 }
 
+/** Height/bump sheet derived from a colour map: dark grout and pores sink,
+ *  bright stone rises. Cheap stand-in for a dedicated height texture. */
+function heightTexture(img, maxSize = 512) {
+  const W = Math.min(maxSize, img.width), H = Math.min(maxSize, img.height);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  x.drawImage(img, 0, 0, W, H);
+  const data = x.getImageData(0, 0, W, H);
+  const d = data.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const l = (d[i] * .299 + d[i+1] * .587 + d[i+2] * .114) / 255;
+    const h = Math.max(0, Math.min(1, .5 + (l - .5) * 1.45));
+    d[i] = d[i+1] = d[i+2] = h * 255;
+    d[i+3] = 255;
+  }
+  x.putImageData(data, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.NoColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 16;
+  return t;
+}
+
+/** Bake a height-gradient into an existing tangent-space normal map. Three
+ *  ignores bumpMap when normalMap is present, so the relief has to live in the
+ *  normal map itself. Seeded, deterministic, done once at load. */
+function relievedNormal(normalTex, heightTex, strength = .5, size = 512) {
+  const nc = document.createElement('canvas'); nc.width = nc.height = size;
+  const nx = nc.getContext('2d');
+  nx.drawImage(normalTex.image, 0, 0, size, size);
+  const hc = document.createElement('canvas'); hc.width = hc.height = size;
+  const hx = hc.getContext('2d');
+  hx.drawImage(heightTex.image, 0, 0, size, size);
+  const hd = hx.getImageData(0, 0, size, size).data;
+  const nd = nx.getImageData(0, 0, size, size);
+  const d = nd.data;
+  const at = (x, y) => hd[((y + size) % size * size + (x + size) % size) * 4] / 255;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      const dx = (at(x + 1, y) - at(x - 1, y)) * strength;
+      const dy = (at(x, y + 1) - at(x, y - 1)) * strength;
+      let vx = d[i] / 127.5 - 1 - dx;
+      let vy = d[i + 1] / 127.5 - 1 - dy;
+      let vz = d[i + 2] / 127.5 - 1;
+      const len = Math.hypot(vx, vy, vz) || 1;
+      d[i] = (vx / len * .5 + .5) * 255;
+      d[i + 1] = (vy / len * .5 + .5) * 255;
+      d[i + 2] = (vz / len * .5 + .5) * 255;
+    }
+  }
+  nx.putImageData(nd, 0, 0);
+  const t = new THREE.CanvasTexture(nc);
+  t.colorSpace = THREE.NoColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 16;
+  return t;
+}
+
 export function stripeTexture(a = '#ff6d75', b = '#fff2d6', count = 12, vertical = true) {
   return canvasTexture(512, 512, (ctx, w, h) => {
     ctx.fillStyle = b; ctx.fillRect(0,0,w,h);
@@ -179,6 +238,10 @@ export async function buildMaterials(renderer) {
   TEX.pavers = configure(desaturatedTexture(pImg, .8, 1024), { srgb: true, repeat: [4,60], aniso });
   TEX.marble = configure(desaturatedTexture(mImg, .78, 1024), { srgb: true, repeat: [4,4], aniso });
   TEX.plaster = configure(desaturatedTexture(plImg, .8, 1024), { srgb: true, repeat: [3,3], aniso });
+  TEX.asphaltH = configure(heightTexture(aImg, 512), { repeat: [7,70], aniso });
+  TEX.paversH = configure(heightTexture(pImg, 512), { repeat: [4,60], aniso });
+  TEX.plasterH = configure(heightTexture(plImg, 512), { repeat: [3,3], aniso });
+  TEX.marbleH = configure(heightTexture(mImg, 512), { repeat: [4,4], aniso });
   TEX.asphaltN = configure(await loader.loadAsync(asphaltNorm), { repeat: [7,70], aniso });
   TEX.asphaltR = configure(await loader.loadAsync(asphaltRough), { repeat: [7,70], aniso });
   TEX.asphaltAO = configure(await loader.loadAsync(asphaltAO), { repeat: [7,70], aniso });
@@ -190,6 +253,12 @@ export async function buildMaterials(renderer) {
   TEX.marbleN = configure(await loader.loadAsync(marbleNorm), { repeat: [4,4], aniso });
   TEX.marbleR = configure(await loader.loadAsync(marbleRough), { repeat: [4,4], aniso });
   TEX.asphaltAO.channel = 0; TEX.paversAO.channel = 0;
+  // bake the height gradient into the normal maps (bumpMap is ignored when a
+  // normalMap is present), giving the paving and walls real micro-relief
+  TEX.asphaltNR = configure(relievedNormal(TEX.asphaltN, TEX.asphaltH, .55), { repeat: [7,70], aniso });
+  TEX.paversNR = configure(relievedNormal(TEX.paversN, TEX.paversH, .7), { repeat: [4,60], aniso });
+  TEX.plasterNR = configure(relievedNormal(TEX.plasterN, TEX.plasterH, .35), { repeat: [3,3], aniso });
+  TEX.marbleNR = configure(relievedNormal(TEX.marbleN, TEX.marbleH, .35), { repeat: [4,4], aniso });
 
   TEX.glow = glowTexture(256);
   TEX.flag = makeFlagTexture('#ff5579', '#ffe489');
@@ -273,7 +342,7 @@ export async function buildMaterials(renderer) {
     MAT['paint_' + name] = new THREE.MeshPhysicalMaterial({
       color, map: patternFor[name] ?? TEX.plaster, roughness: .47, metalness: .03,
       clearcoat: .55, clearcoatRoughness: .26,
-      normalMap: TEX.plasterN, normalScale: new THREE.Vector2(.55,.55),
+      normalMap: TEX.plasterNR, normalScale: new THREE.Vector2(.55,.55),
       roughnessMap: TEX.plasterR, aoMap: TEX.wallAO, aoMapIntensity: .32, envMapIntensity: 1.28
     });
   }
@@ -289,17 +358,17 @@ export async function buildMaterials(renderer) {
 
   // ── surfaces ────────────────────────────────────────────────
   MAT.road = new THREE.MeshPhysicalMaterial({
-    color: '#d5d4cb', map: TEX.asphalt, normalMap: TEX.asphaltN, normalScale: new THREE.Vector2(.85,.85),
+    color: '#d5d4cb', map: TEX.asphalt, normalMap: TEX.asphaltNR, normalScale: new THREE.Vector2(.85,.85),
     roughnessMap: TEX.asphaltR, aoMap: TEX.asphaltAO, aoMapIntensity: .9,
     roughness: .58, metalness: .03, clearcoat: .55, clearcoatRoughness: .22, envMapIntensity: 1.0
   });
   MAT.sidewalk = new THREE.MeshPhysicalMaterial({
-    color: '#f4ddbe', map: TEX.pavers, normalMap: TEX.paversN, normalScale: new THREE.Vector2(1.0,1.0),
+    color: '#f4ddbe', map: TEX.pavers, normalMap: TEX.paversNR, normalScale: new THREE.Vector2(1.0,1.0),
     roughnessMap: TEX.paversR, aoMap: TEX.paversAO, aoMapIntensity: 1.0,
     roughness: .62, clearcoat: .24, clearcoatRoughness: .4, envMapIntensity: .8
   });
   MAT.marble = new THREE.MeshPhysicalMaterial({
-    color: '#f8e6dc', map: TEX.marble, normalMap: TEX.marbleN, normalScale: new THREE.Vector2(.7,.7),
+    color: '#f8e6dc', map: TEX.marble, normalMap: TEX.marbleNR, normalScale: new THREE.Vector2(.7,.7),
     roughnessMap: TEX.marbleR, roughness: .35, clearcoat: .65, clearcoatRoughness: .2, envMapIntensity: 1.2
   });
   MAT.curb = new THREE.MeshPhysicalMaterial({ color: '#f1dcc0', roughness: .55, clearcoat: .2, envMapIntensity: .8 });
