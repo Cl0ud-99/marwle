@@ -146,7 +146,8 @@ async function boot() {
     sign:   { pos:[3.2, 4.3, 19.0], target:[11.5, 9.2, 4.0],  fov:52, focus:17 },
     water:  { pos:[0.5, .74, 1.5],   target:[-.3, 3.1, -43.0], fov:48, focus:9 },
     fountain:{pos:[0.0, 2.9, -52.0], target:[0, 4.8, -72.0],   fov:52, focus:18 },
-    skyline:{ pos:[0.0, 18.0, 18.0], target:[0.0, 14.0, -120.0], fov:55, focus:70 }
+    skyline:{ pos:[0.0, 18.0, 18.0], target:[0.0, 14.0, -120.0], fov:55, focus:70 },
+    south:  { pos:[0.4, 2.2, -108.0], target:[0.2, 4.4, -200.0], fov:60, focus:30 }
   };
   let mode = 'intro';
   let cinemaStart = 0;
