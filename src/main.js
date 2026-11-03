@@ -279,7 +279,8 @@ async function boot() {
     player.pos.z = THREE.MathUtils.clamp(player.pos.z, -95, 20.5);
 
     // ── volume collision ──────────────────────────────────────
-    if (city.resolveCollisions) city.resolveCollisions(player.pos, .38);
+    const STEP = .30;
+    if (city.resolveCollisions) city.resolveCollisions(player.pos, .38, player.y, STEP);
     for (const p of city.pedestrians) {
       if (p.visible === false) continue;
       const dx = player.pos.x - p.position.x, dz = player.pos.z - p.position.z;
@@ -295,15 +296,22 @@ async function boot() {
       }
     }
 
-    // ── jump / gravity ────────────────────────────────────────
+    // ── jump / gravity / standable tops ──────────────────────
     if (!player.grounded) {
       player.vy -= GRAVITY * dt;
       player.y += player.vy * dt;
-      if (player.y <= 0) {
-        player.y = 0;
+      const support = city.supportAt(player.pos.x, player.pos.z, .2, player.y + .02);
+      if (player.vy <= 0 && player.y <= support) {
+        player.y = support;
         player.grounded = true;
         player.land = 1; // short landing dip, decays below
       }
+    } else {
+      const support = city.supportAt(player.pos.x, player.pos.z, .2, player.y + STEP + .02);
+      if (support > player.y + .001) player.y = support;          // step up
+      else if (support < player.y - .04) {                        // walked off an edge
+        player.grounded = false; player.vy = 0;
+      } else player.y = support;
     }
     player.land = Math.max(0, player.land - dt * 4.2);
     const landDip = Math.sin(player.land * Math.PI) * .085;

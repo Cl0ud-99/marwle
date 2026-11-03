@@ -48,10 +48,35 @@ function addBuilding(root, b, x, z, rotY, w = 0, d = 0) {
   return b;
 }
 
-/** Push a circle out of every box/circle collider. Two passes handle corners. */
-function resolveCollisions(pos, radius, colliders) {
+/** Point-in-footprint test, used by both the push-out and the support query. */
+function colliderContains(c, x, z, radius) {
+  if (c.kind === 'circle') {
+    const rr = c.r + radius;
+    return (x - c.x) ** 2 + (z - c.z) ** 2 < rr * rr;
+  }
+  const dx = x - c.x, dz = z - c.z, cs = Math.cos(c.rot), sn = Math.sin(c.rot);
+  const lx = dx * cs + dz * sn, lz = -dx * sn + dz * cs;
+  return Math.abs(lx) < c.hx + radius && Math.abs(lz) < c.hz + radius;
+}
+
+/** Highest walkable top under a circle, no higher than maxTop. */
+function supportAt(x, z, radius, maxTop, colliders) {
+  let h = 0;
+  for (const c of colliders) {
+    const top = c.top;
+    if (!top || top > maxTop + 1e-3 || top <= h) continue;
+    if (colliderContains(c, x, z, radius)) h = top;
+  }
+  return h;
+}
+
+/** Push a circle out of every box/circle collider. Two passes handle corners.
+ *  Colliders with a top at or below feetY + step are walkable and are skipped,
+ *  which is what lets the player hop onto bollards, benches and car roofs. */
+function resolveCollisions(pos, radius, colliders, feetY = 0, step = 0) {
   for (let pass = 0; pass < 2; pass++) {
     for (const c of colliders) {
+      if (c.top && feetY + step >= c.top - 1e-4) continue;
       if (c.kind === 'circle') {
         const dx = pos.x - c.x, dz = pos.z - c.z;
         const rr = c.r + radius, d2 = dx*dx + dz*dz;
@@ -176,9 +201,22 @@ export function buildCity(scene, renderer) {
     add(root, rBox(.16,.07,86,.035), MAT.creamTrim, [side*1.44,.055,-26], { cast:false });
     for (let z=14; z>-66; z-=7.8) add(root, rBox(.48,.018,.9,.01), MAT.darkMetal, [side*1.32,.058,z], { cast:false });
   }
-  // stepping slabs across the water
-  for (const z of [10, -5, -22, -39, -52]) {
+  // stepping slabs across the water: walkable tops plus a blocked rill between
+  // them, so the only way across is over a stone
+  const stepZ = [10, -5, -22, -39, -52];
+  for (const z of stepZ) {
     const s = add(root, rBox(3.25,.10,1.15,.06,2), MAT.marble, [0,.075,z], { cast:false });
+    colliders.push({ kind:'box', x:0, z, hx:1.6, hz:.58, rot:0, top:.13 });
+  }
+  {
+    const edges = [17];
+    for (const z of stepZ) edges.push(z + .72, z - .72);
+    edges.push(-69);
+    for (let i = 0; i < edges.length; i += 2) {
+      const a = edges[i], b = edges[i+1];
+      if (a - b < .4) continue;
+      colliders.push({ kind:'box', x:0, z:(a+b)/2, hx:1.32, hz:(a-b)/2, rot:0 });
+    }
   }
 
   // plaza: ring of inlaid paving around the pool
@@ -284,16 +322,16 @@ export function buildCity(scene, renderer) {
   });
   // bollards
   const bollards=[];
-  for(let z=19;z>-88;z-=2.8){ if(z%8.4<2.8) { bollards.push({x:-6.1,y:.15,z,scale:1}); bollards.push({x:6.1,y:.15,z,scale:1}); colliders.push({kind:'circle',x:-6.1,z,r:.2}); colliders.push({kind:'circle',x:6.1,z,r:.2}); } }
+  for(let z=19;z>-88;z-=2.8){ if(z%8.4<2.8) { bollards.push({x:-6.1,y:.15,z,scale:1}); bollards.push({x:6.1,y:.15,z,scale:1}); colliders.push({kind:'circle',x:-6.1,z,r:.2,top:.78}); colliders.push({kind:'circle',x:6.1,z,r:.2,top:.78}); } }
   const bmat=MAT.darkMetal;
   root.add(makeInstanced(new THREE.CylinderGeometry(.13,.17,.85,12), bmat, bollards, true, true));
   root.add(makeInstanced(torus(.14,.025,5,16), MAT.gold, bollards.map(b=>({x:b.x,y:b.y+.55,z:b.z,rot:[Math.PI/2,0,0]})), false, false));
   // trees and planters
   const treePositions = [[-8.2,3.0,'pink',1.15],[-8.0,-27.5,'palm',1.0],[-8.4,-48.0,'puff',1.1],[8.0,16.0,'palm',.95],[8.2,-3.0,'pink',1.15],[8.0,-34.0,'palm',1.05],[8.2,-54.0,'puff',.95],[-8.0,10.5,'puff',.75]];
   treePositions.forEach(([x,z,kind,s],i)=>{ const t=createTree(300+i,kind,s); t.position.set(x,.12,z); t.rotation.y=(i*.9)%TAU; root.add(t); colliders.push({kind:'circle',x,z,r:.36*s}); const sh=contactShadow(3.2*s,3.2*s,.27); sh.position.set(x,.135,z); root.add(sh); });
-  for (const [x,z,s] of [[-5.9,9,1.0],[5.9,0,.85],[-5.9,-33,1.0],[5.9,-55,.9],[-7.6,-68,1.2],[7.6,-68,1.2]]) { const p=createShrubPlanter(x*17+31,s); p.position.set(x,.13,z); root.add(p); colliders.push({kind:'circle',x,z,r:.8*s}); }
+  for (const [x,z,s] of [[-5.9,9,1.0],[5.9,0,.85],[-5.9,-33,1.0],[5.9,-55,.9],[-7.6,-68,1.2],[7.6,-68,1.2]]) { const p=createShrubPlanter(x*17+31,s); p.position.set(x,.13,z); root.add(p); colliders.push({kind:'circle',x,z,r:.8*s,top:.72*s}); }
   // benches
-  for(const [x,z,a] of [[-8.8,6.8,Math.PI/2],[-8.9,-30,Math.PI/2],[8.8,5.5,-Math.PI/2],[8.9,-30.5,-Math.PI/2]]) { const b=createBench(300+x*3+z); b.position.set(x,.15,z); b.rotation.y=a; root.add(b); colliders.push({kind:'box',x,z,hx:.95,hz:.5,rot:a}); }
+  for(const [x,z,a] of [[-8.8,6.8,Math.PI/2],[-8.9,-30,Math.PI/2],[8.8,5.5,-Math.PI/2],[8.9,-30.5,-Math.PI/2]]) { const b=createBench(300+x*3+z); b.position.set(x,.15,z); b.rotation.y=a; root.add(b); colliders.push({kind:'box',x,z,hx:.95,hz:.5,rot:a,top:.55}); }
   // cafe life under the right awning
   const cafe1=createCafeSet(12, MAT.awningBlue); cafe1.position.set(8.6,.14,11.0); root.add(cafe1); colliders.push({kind:'circle',x:8.6,z:11.0,r:1.5});
   const cafe2=createCafeSet(14, MAT.awningMint); cafe2.position.set(8.7,.14,-13.0); root.add(cafe2); colliders.push({kind:'circle',x:8.7,z:-13.0,r:1.5});
@@ -302,11 +340,11 @@ export function buildCity(scene, renderer) {
     const pl=createShrubPlanter(870+Math.round(px*7+pz),s); pl.position.set(px,.14,pz); root.add(pl); colliders.push({kind:'circle',x:px,z:pz,r:.85*s});
   }
   // cars parked curbside
-  const car1=createCar('#e33b4c',1); car1.position.set(-4.1,.02,10.8); car1.rotation.y=Math.PI; root.add(car1); colliders.push({kind:'box',x:-4.1,z:10.8,hx:.95,hz:2.2,rot:Math.PI});
-  const car2=createCar('#f0b948',2); car2.position.set(4.0,.02,-35.0); car2.rotation.y=0; root.add(car2); colliders.push({kind:'box',x:4.0,z:-35.0,hx:.95,hz:2.2,rot:0});
-  const car3=createCar('#2d94c8',3); car3.position.set(-3.9,.02,-47.0); car3.rotation.y=Math.PI; root.add(car3); colliders.push({kind:'box',x:-3.9,z:-47.0,hx:.95,hz:2.2,rot:Math.PI});
-  const car4=createCar('#ef9d3f',4); car4.position.set(-4.5,.02,29.0); car4.rotation.y=Math.PI+.04; root.add(car4); colliders.push({kind:'box',x:-4.5,z:29.0,hx:.95,hz:2.2,rot:Math.PI+.04});
-  const sc3=createScooter('#e4b13c'); sc3.position.set(8.9,.13,28.0); sc3.rotation.y=-.1; root.add(sc3); colliders.push({kind:'circle',x:8.9,z:28.0,r:.45});
+  const car1=createCar('#e33b4c',1); car1.position.set(-4.1,.02,10.8); car1.rotation.y=Math.PI; root.add(car1); colliders.push({kind:'box',x:-4.1,z:10.8,hx:.95,hz:2.2,rot:Math.PI,top:1.28});
+  const car2=createCar('#f0b948',2); car2.position.set(4.0,.02,-35.0); car2.rotation.y=0; root.add(car2); colliders.push({kind:'box',x:4.0,z:-35.0,hx:.95,hz:2.2,rot:0,top:1.28});
+  const car3=createCar('#2d94c8',3); car3.position.set(-3.9,.02,-47.0); car3.rotation.y=Math.PI; root.add(car3); colliders.push({kind:'box',x:-3.9,z:-47.0,hx:.95,hz:2.2,rot:Math.PI,top:1.28});
+  const car4=createCar('#ef9d3f',4); car4.position.set(-4.5,.02,29.0); car4.rotation.y=Math.PI+.04; root.add(car4); colliders.push({kind:'box',x:-4.5,z:29.0,hx:.95,hz:2.2,rot:Math.PI+.04,top:1.28});
+  const sc3=createScooter('#e4b13c'); sc3.position.set(8.9,.13,28.0); sc3.rotation.y=-.1; root.add(sc3); colliders.push({kind:'circle',x:8.9,z:28.0,r:.45,top:.78});
   const cart = createCandyCart();
   cart.group.position.set(-4.25,.03,15.2); cart.group.rotation.y=.10; root.add(cart.group); colliders.push({kind:'box',x:-4.25,z:15.2,hx:1.45,hz:1.1,rot:.10}); markDynamic(cart.group);
   updaters.push(t=>{ cart.balloons.forEach((b,i)=>{
@@ -315,14 +353,14 @@ export function buildCity(scene, renderer) {
     b.rotation.z = Math.sin(t*.7+i)*.05;
   }); });
   // scooters
-  const sc1=createScooter('#20b4b7'); sc1.position.set(8.9,.13,7.0); sc1.rotation.y=.2; root.add(sc1); colliders.push({kind:'circle',x:8.9,z:7.0,r:.45});
-  const sc2=createScooter('#e45c70'); sc2.position.set(-8.9,.13,-24.0); sc2.rotation.y=Math.PI-.15; root.add(sc2); colliders.push({kind:'circle',x:-8.9,z:-24.0,r:.45});
+  const sc1=createScooter('#20b4b7'); sc1.position.set(8.9,.13,7.0); sc1.rotation.y=.2; root.add(sc1); colliders.push({kind:'circle',x:8.9,z:7.0,r:.45,top:.78});
+  const sc2=createScooter('#e45c70'); sc2.position.set(-8.9,.13,-24.0); sc2.rotation.y=Math.PI-.15; root.add(sc2); colliders.push({kind:'circle',x:-8.9,z:-24.0,r:.45,top:.78});
   // vending machine / newspaper boxes
   for (let i=0;i<2;i++){
     const vg=new THREE.Group(); add(vg,rBox(.9,1.7,.65,.08,3), i?MAT.paint_blue:MAT.paint_coral,[0,.85,0]);
     add(vg,rBox(.7,1.1,.03,.02), MAT.glassWarm,[0,1.02,.34]);
     add(vg,plane(.62,.8), new THREE.MeshBasicMaterial({map:i?TEX.poster2:TEX.poster1, toneMapped:false, color:new THREE.Color().setScalar(.9)}),[0,1.02,.36],{cast:false,receive:false}).userData.noMerge=true;
-    vg.position.set(9.6,.14, i? -6.5: 2.0); vg.rotation.y=-.15; root.add(vg); colliders.push({kind:'box',x:9.6,z:i?-6.5:2.0,hx:.5,hz:.4,rot:-.15});
+    vg.position.set(9.6,.14, i? -6.5: 2.0); vg.rotation.y=-.15; root.add(vg); colliders.push({kind:'box',x:9.6,z:i?-6.5:2.0,hx:.5,hz:.4,rot:-.15,top:1.7});
   }
 
   // fountain and its court
@@ -333,9 +371,9 @@ export function buildCity(scene, renderer) {
     const pl=new THREE.Group(); add(pl,cyl(.7,.9,.55,20),MAT.terracotta,[0,.28,0]); add(pl,sphere(.9,16,12),i%2?MAT.leafPink:MAT.leafMid,[0,1.0,0]).scale.set(1.2,.7,1.2);
     for(let j=0;j<7;j++){const aa=j/7*TAU; add(pl,sphere(.07,8,6),j%2?MAT.flowerPink:MAT.flowerGold,[Math.cos(aa)*.65,.95+Math.sin(aa)*.4,.65*Math.sin(aa)]);}
     pl.position.set(Math.cos(a)*16.5,.12,-72+Math.sin(a)*16.5); root.add(pl);
-    colliders.push({kind:'circle',x:Math.cos(a)*16.5,z:-72+Math.sin(a)*16.5,r:.9});
+    colliders.push({kind:'circle',x:Math.cos(a)*16.5,z:-72+Math.sin(a)*16.5,r:.9,top:.75});
     const b=createBench(500+i); b.position.set(Math.cos(a+.16)*18.5,.13,-72+Math.sin(a+.16)*18.5); b.rotation.y=-a+Math.PI/2; root.add(b);
-    colliders.push({kind:'box',x:Math.cos(a+.16)*18.5,z:-72+Math.sin(a+.16)*18.5,hx:.95,hz:.5,rot:-a+Math.PI/2});
+    colliders.push({kind:'box',x:Math.cos(a+.16)*18.5,z:-72+Math.sin(a+.16)*18.5,hx:.95,hz:.5,rot:-a+Math.PI/2,top:.55});
   }
 
   // gate bridge and skyline
@@ -533,6 +571,7 @@ export function buildCity(scene, renderer) {
   ACTIVE_COLLIDERS = null;
   return {
     root, water, fountain, pedestrians, mergeInfo, dynamicInfo, update, colliders,
-    resolveCollisions: (pos, radius) => resolveCollisions(pos, radius, colliders)
+    resolveCollisions: (pos, radius, feetY, step) => resolveCollisions(pos, radius, colliders, feetY, step),
+    supportAt: (x, z, radius, maxTop) => supportAt(x, z, radius, maxTop, colliders)
   };
 }
