@@ -566,7 +566,7 @@ export function createGenericBuilding(opts) {
   const {
     width = 12, depth = 10, height = 15, body = MAT.paint_cream, trim = MAT.paint_coral,
     accent = MAT.paint_teal, rows = 3, cols = 4, roof = 'garden', signTex = null, seed = 1,
-    cornerTower = false, balconyRow = -1
+    cornerTower = false, balconyRow = -1, sideFacade = false
   } = opts;
   const r = rng(seed);
   const g = new THREE.Group();
@@ -595,6 +595,31 @@ export function createGenericBuilding(opts) {
     flowerRows: rows>2?[1]:[], balconyRows: balconyRow>=0?[balconyRow]:[],
     litPattern: (row,col)=>((row*7+col*3+seed)%9<2)
   });
+  // side elevations: without these, a row viewed down the avenue is a run of
+  // blank boxes between the detailed fronts
+  if (sideFacade) {
+    const sideCols = Math.min(3, Math.max(2, Math.round(depth * .22)));
+    const sideRows = Math.min(rows, 3);
+    for (const sx of [-1, 1]) {
+      for (let row = 0; row < sideRows; row++) {
+        for (let col = 0; col < sideCols; col++) {
+          const w = windowUnit(Math.min(1.15, depth / (sideCols * 2.2)), 1.35, {
+            glass: r() > .45 ? MAT.glassBlue : MAT.glassDark, frameMat: trim, style: 'flat'
+          });
+          w.position.set(
+            sx * (width/2 + .05),
+            5.4 + row * (height - 6.4) / sideRows,
+            -depth*.34 + (col / Math.max(1, sideCols - 1)) * depth*.68
+          );
+          w.rotation.y = sx * Math.PI/2;
+          g.add(w);
+        }
+      }
+      for (let row = 1; row < sideRows; row++) {
+        add(g, rBox(.18, .08, depth*.94, .02), trim, [sx * (width/2 + .04), 5.4 + row * (height - 6.4) / sideRows, 0]);
+      }
+    }
+  }
   // facade rhythm: slim pilasters, floor bands and a central crest
   for (let i=0;i<=cols;i++) {
     const x = -width*.43 + (i/cols)*width*.86;

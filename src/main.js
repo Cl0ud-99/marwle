@@ -66,7 +66,7 @@ async function boot() {
   renderer.shadowMap.type = THREE.PCFShadowMap;
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0xbde1ef, .0030);
+  scene.fog = new THREE.FogExp2(0xbde1ef, .0019);
 
   const camera = new THREE.PerspectiveCamera(51, window.innerWidth/window.innerHeight, .08, 2200);
   camera.position.set(3.2, 2.45, 24);
@@ -85,17 +85,17 @@ async function boot() {
   const hemi = new THREE.HemisphereLight('#d7f1ff', '#ffd0a1', .07);
   scene.add(hemi);
   const sun = new THREE.DirectionalLight('#ffdfb0', 4.0);
-  const sunTarget = new THREE.Vector3(0, 4, -30);
-  sun.position.set(-100, 65, 110);
+  const sunTarget = new THREE.Vector3(0, 4, -90);
+  sun.position.set(-100, 65, 50);
   sun.target.position.copy(sunTarget);
   sun.castShadow = true;
   sun.shadow.mapSize.set(QUALITY.shadowMap, QUALITY.shadowMap);
   sun.shadow.camera.left = -60;
   sun.shadow.camera.right = 60;
-  sun.shadow.camera.top = 78;
-  sun.shadow.camera.bottom = -78;
+  sun.shadow.camera.top = 155;
+  sun.shadow.camera.bottom = -155;
   sun.shadow.camera.near = 10;
-  sun.shadow.camera.far = 300;
+  sun.shadow.camera.far = 380;
   sun.shadow.bias = -.00018;
   sun.shadow.normalBias = .032;
   sun.shadow.radius = 3.0;
@@ -276,7 +276,7 @@ async function boot() {
       const d=Math.hypot(dx,dz);
       if (d < 9.5 && d > .01) { player.pos.x = dx/d*9.5; player.pos.z = -72 + dz/d*9.5; }
     }
-    player.pos.z = THREE.MathUtils.clamp(player.pos.z, -95, 20.5);
+    player.pos.z = THREE.MathUtils.clamp(player.pos.z, -195, 20.5);
 
     // ── volume collision ──────────────────────────────────────
     const STEP = .30;

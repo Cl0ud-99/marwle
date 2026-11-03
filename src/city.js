@@ -18,6 +18,91 @@ import { createWaterMirror } from './water.js';
 
 const V = (x,y,z) => new THREE.Vector3(x,y,z);
 
+function clockFaceTexture() {
+  return canvasTexture(512, 512, (ctx) => {
+    ctx.clearRect(0, 0, 512, 512);
+    ctx.fillStyle = '#fff6e0';
+    ctx.beginPath(); ctx.arc(256, 256, 238, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#c9973f'; ctx.lineWidth = 16; ctx.stroke();
+    ctx.strokeStyle = '#2b2233'; ctx.lineWidth = 8;
+    for (let i = 0; i < 12; i++) {
+      const a = i / 12 * TAU;
+      ctx.beginPath();
+      ctx.moveTo(256 + Math.cos(a) * 190, 256 + Math.sin(a) * 190);
+      ctx.lineTo(256 + Math.cos(a) * 216, 256 + Math.sin(a) * 216);
+      ctx.stroke();
+    }
+    ctx.lineWidth = 14;
+    ctx.beginPath(); ctx.moveTo(256, 256); ctx.lineTo(256, 118); ctx.stroke();
+    ctx.lineWidth = 10;
+    ctx.beginPath(); ctx.moveTo(256, 256); ctx.lineTo(350, 292); ctx.stroke();
+    ctx.fillStyle = '#c9973f';
+    ctx.beginPath(); ctx.arc(256, 256, 16, 0, TAU); ctx.fill();
+  }, { clamp: true });
+}
+
+/** Sugar Clock Tower: the second district's vertical landmark. */
+function createClockTower() {
+  const g = new THREE.Group();
+  const face = clockFaceTexture();
+  add(g, rBox(12, 7, 12, .8, 4), MAT.paint_cream, [0, 3.5, 0]);
+  add(g, rBox(13, .6, 13, .18, 2), MAT.paint_coral, [0, 7.2, 0]);
+  add(g, cyl(4.6, 5.8, 16, 48), MAT.paint_teal, [0, 15.5, 0]);
+  for (let i = 0; i < 4; i++) add(g, torus(5.0 + i * .15, .10, 8, 48), MAT.gold, [0, 9 + i * 3.2, 0], { rot:[Math.PI/2, 0, 0] });
+  add(g, rBox(9, 7, 9, .6, 3), MAT.paint_cream, [0, 27, 0]);
+  add(g, rBox(9.4, .5, 9.4, .14, 2), MAT.gold, [0, 30.6, 0]);
+  const sign = MAT.sign(face, 1);
+  for (const [x, z, ry] of [[0, 4.52, 0], [0, -4.52, Math.PI], [4.52, 0, Math.PI/2], [-4.52, 0, -Math.PI/2]]) {
+    add(g, plane(6.4, 6.4), sign, [x, 27, z], { rot:[0, ry, 0], cast:false, receive:false });
+    add(g, torus(3.35, .12, 8, 48), MAT.gold, [x, 27, z], { rot:[0, ry, 0], cast:false });
+  }
+  add(g, cyl(3.4, 3.9, 5, 32), MAT.glassWarm, [0, 33.5, 0]);
+  add(g, new THREE.CylinderGeometry(3.6, 2.6, 5, 32), MAT.paint_coral, [0, 38.5, 0]);
+  add(g, cyl(.10, .16, 6, 8), MAT.gold, [0, 43.5, 0]);
+  add(g, new THREE.OctahedronGeometry(.55, 0), MAT.neon('#ffe48e', 4), [0, 46.5, 0], { cast:false }).userData.noMerge = true;
+  return g;
+}
+
+/** Candy wheel: a static ferris-wheel landmark facing the avenue. */
+function createCandyWheel() {
+  const g = new THREE.Group();
+  add(g, new THREE.CylinderGeometry(4.2, 4.8, .6, 32), MAT.paint_cream, [0, .3, 0]);
+  add(g, torus(4.5, .12, 6, 48), MAT.gold, [0, .6, 0], { rot:[Math.PI/2, 0, 0] });
+  const legAngle = Math.atan2(4.6, 12.4);
+  for (const sx of [-1, 1]) {
+    add(g, rBox(.75, 14.4, .75, .1, 3), MAT.paint_blue, [sx * 2.3, 6.2, 0], { rot:[0, 0, sx * legAngle] });
+    add(g, rBox(.5, 13.0, .5, .08, 3), MAT.gold, [sx * 3.35, 5.7, 0], { rot:[0, 0, sx * (legAngle - .1)] });
+  }
+  add(g, rBox(9.6, .4, .6, .08, 2), MAT.gold, [0, .9, 0]);
+  const spin = new THREE.Group(); spin.position.y = 12.6; g.add(spin);
+  for (const sz of [-.45, .45]) {
+    add(spin, torus(9.4, .22, 8, 96), MAT.paint_glossRed, [0, 0, sz], { rot:[0, 0, 0] });
+    add(spin, torus(9.4, .08, 6, 96), MAT.gold, [0, 0, sz], { rot:[0, 0, 0] });
+  }
+  for (let i = 0; i < 12; i++) {
+    const a = i / 12 * TAU;
+    add(spin, rBox(.10, 9.4, .10, .02), MAT.gold, [Math.cos(a) * 4.7, Math.sin(a) * 4.7, 0], { rot:[0, 0, a - Math.PI/2] });
+    add(spin, sphere(.62, 12, 10), i % 3 ? MAT.paint_coral : MAT.paint_butter, [Math.cos(a) * 9.6, Math.sin(a) * 9.6, 0]);
+    add(spin, cyl(.03, .03, .8, 6), MAT.gold, [Math.cos(a) * 9.0, Math.sin(a) * 9.0, 0]);
+  }
+  add(spin, cyl(.9, .9, 1.8, 20), MAT.gold, [0, 0, 0], { rot:[Math.PI/2, 0, 0] });
+  return g;
+}
+
+// ── unique shop signage ─────────────────────────────────────
+const SHOP_SIGNS = new Map();
+function shopSign(name, bg = '#ff6f86', fg = '#fff7e2') {
+  const key = name + bg;
+  if (!SHOP_SIGNS.has(key)) {
+    SHOP_SIGNS.set(key, textTexture({
+      text: name, width: 1024, height: 384, bg, color: fg, rounded: true, radius: 36,
+      border: '#2a2036', borderWidth: 10, stroke: '#2a2036', strokeWidth: 10,
+      font: '900 132px Bungee, "Arial Black", sans-serif', spacing: 3
+    }));
+  }
+  return SHOP_SIGNS.get(key);
+}
+
 function markDynamic(obj) {
   // Mark the group itself. mergeStatic() skips the whole subtree for the
   // static city pass, then collapses the group's own internals in local space.
@@ -159,6 +244,21 @@ export function buildCity(scene, renderer) {
   }
   // crosswalk before the plaza
   for (let i=0;i<10;i++) add(root, rBox(1.05,.02,4.2,.02), MAT.whiteTrim, [-5.4+i*1.2,.035,-56], { cast:false });
+
+  // ── south extension: the avenue continues past the arch ────
+  const extRoad = add(root, plane(13.4, 155), MAT.road, [0, .015, -186], { rot:[-Math.PI/2,0,0], cast:false }); extRoad.receiveShadow = true;
+  for (const side of [-1,1]) {
+    add(root, plane(6.4, 155), MAT.sidewalk, [side*10.1, .13, -186], { rot:[-Math.PI/2,0,0], cast:false });
+    add(root, rBox(.3,.16,155,.05,2), MAT.curb, [side*6.65,.08,-186], { cast:false });
+    add(root, rBox(.34,.012,150,.008), MAT.paint_coral, [side*7.1,.137,-186], { cast:false });
+    add(root, rBox(.18,.012,150,.008), MAT.paint_teal, [side*12.85,.137,-186], { cast:false });
+    for (let z=-112; z>-202; z-=6.2) add(root, rBox(.10,.014,2.8,.02), MAT.whiteTrim, [side*5.0, .035, z], { cast:false });
+  }
+  for (let i=0;i<10;i++) add(root, rBox(1.05,.02,4.2,.02), MAT.whiteTrim, [-5.4+i*1.2,.035,-110], { cast:false });
+  for (const [mx,mz] of [[3.5,-124],[-4.0,-147],[3.7,-171],[-3.8,-192]]) {
+    add(root, new THREE.CylinderGeometry(.55,.55,.035,24), MAT.darkMetal, [mx,.055,mz]);
+    for(let i=0;i<5;i++) add(root, rBox(.9,.01,.045,.005), MAT.brass, [mx,.073,mz-.25+i*.12], {cast:false});
+  }
   // cast-iron manholes and a little inlaid district mark
   for (const [mx,mz] of [[3.5,7.2],[-4.0,-15.0],[3.7,-37.0]]) {
     add(root, new THREE.CylinderGeometry(.55,.55,.035,24), MAT.darkMetal, [mx,.055,mz]);
@@ -264,13 +364,13 @@ export function buildCity(scene, renderer) {
   const dream = addBuilding(root, createDreamTower(), -17.2, -16.5, leftRot-.04, 10, 10);
   const marwle = addBuilding(root, createMarwleHall(), 16.2, 4.0, rightRot+.18, 12, 10);
   setDetail(baseDetail);
-  const l3 = addBuilding(root, createGenericBuilding({ width:16, depth:10, height:18.5, body:MAT.paint_butter, trim:MAT.paint_coral, accent:MAT.paint_teal, rows:4, cols:5, roof:'garden', seed:13, signTex:TEX.candy, cornerTower:true }), -16.0, -37.5, leftRot, 16, 10);
-  const r2 = addBuilding(root, createGenericBuilding({ width:17, depth:11, height:21, body:MAT.paint_coral, trim:MAT.paint_cream, accent:MAT.paint_blue, rows:5, cols:5, roof:'sundae', seed:24, signTex:TEX.soda, balconyRow:2 }), 16.7, -17.0, rightRot, 17, 11);
-  const l4 = addBuilding(root, createGenericBuilding({ width:18, depth:12, height:23, body:MAT.paint_lavender, trim:MAT.paint_butter, accent:MAT.paint_coral, rows:5, cols:5, roof:'donut', seed:35, signTex:TEX.dream, cornerTower:true }), 17.0, -39.5, rightRot, 18, 12);
-  const l5 = addBuilding(root, createGenericBuilding({ width:18, depth:12, height:25, body:MAT.paint_mint, trim:MAT.paint_coral, accent:MAT.gold, rows:5, cols:5, roof:'ring', seed:46, signTex:TEX.dream }), -17.0, -58.5, leftRot, 18, 12);
-  const r4 = addBuilding(root, createGenericBuilding({ width:18, depth:12, height:24, body:MAT.paint_peach, trim:MAT.paint_cream, accent:MAT.paint_magenta, rows:5, cols:5, roof:'rocket', seed:57, signTex:TEX.candy }), 17.4, -59.5, rightRot, 18, 12);
-  const l6 = addBuilding(root, createGenericBuilding({ width:20, depth:13, height:27, body:MAT.paint_blue, trim:MAT.paint_cream, accent:MAT.paint_butter, rows:6, cols:6, roof:'garden', seed:68, signTex:TEX.soda, cornerTower:true }), -18.2, -84.0, leftRot, 20, 13);
-  const r5 = addBuilding(root, createGenericBuilding({ width:20, depth:13, height:26, body:MAT.paint_rose, trim:MAT.paint_cream, accent:MAT.paint_teal, rows:6, cols:6, roof:'sundae', seed:79, signTex:TEX.candy }), 18.0, -84.5, rightRot, 20, 13);
+  const l3 = addBuilding(root, createGenericBuilding({ width:16, depth:10, height:18.5, body:MAT.paint_butter, trim:MAT.paint_coral, accent:MAT.paint_teal, rows:4, cols:5, roof:'garden', seed:13, signTex:shopSign('SUGAR & CO', '#ff6f86'), cornerTower:true }), -16.0, -37.5, leftRot, 16, 10);
+  const r2 = addBuilding(root, createGenericBuilding({ width:17, depth:11, height:21, body:MAT.paint_coral, trim:MAT.paint_cream, accent:MAT.paint_blue, rows:5, cols:5, roof:'sundae', seed:24, signTex:shopSign('FIZZ LAB', '#38b7c9'), balconyRow:2 }), 16.7, -17.0, rightRot, 17, 11);
+  const l4 = addBuilding(root, createGenericBuilding({ width:18, depth:12, height:23, body:MAT.paint_lavender, trim:MAT.paint_butter, accent:MAT.paint_coral, rows:5, cols:5, roof:'donut', seed:35, signTex:shopSign('TAFFY HOUSE', '#c79cff'), cornerTower:true }), 17.0, -39.5, rightRot, 18, 12);
+  const l5 = addBuilding(root, createGenericBuilding({ width:18, depth:12, height:25, body:MAT.paint_mint, trim:MAT.paint_coral, accent:MAT.gold, rows:5, cols:5, roof:'ring', seed:46, signTex:shopSign('GUMDROP', '#7fd8b5') }), -17.0, -58.5, leftRot, 18, 12);
+  const r4 = addBuilding(root, createGenericBuilding({ width:18, depth:12, height:24, body:MAT.paint_peach, trim:MAT.paint_cream, accent:MAT.paint_magenta, rows:5, cols:5, roof:'rocket', seed:57, signTex:shopSign('CANDY FLOSS', '#ff9db7') }), 17.4, -59.5, rightRot, 18, 12);
+  const l6 = addBuilding(root, createGenericBuilding({ width:20, depth:13, height:27, body:MAT.paint_blue, trim:MAT.paint_cream, accent:MAT.paint_butter, rows:6, cols:6, roof:'garden', seed:68, signTex:shopSign('CHOCO BAR', '#c98a5a'), cornerTower:true }), -18.2, -84.0, leftRot, 20, 13);
+  const r5 = addBuilding(root, createGenericBuilding({ width:20, depth:13, height:26, body:MAT.paint_rose, trim:MAT.paint_cream, accent:MAT.paint_teal, rows:6, cols:6, roof:'sundae', seed:79, signTex:shopSign('JELLY BEAN', '#ffcf5a') }), 18.0, -84.5, rightRot, 20, 13);
   // near-camera framing blocks: the street should feel embedded in a city, not a diorama
   const fgL = addBuilding(root, createGenericBuilding({ width:12, depth:11, height:12.5, body:MAT.paint_rose, trim:MAT.paint_cream, accent:MAT.paint_butter, rows:2, cols:3, roof:'garden', seed:91, signTex:null }), -15.2, 29.0, leftRot-.08, 12, 11);
   const fgR = addBuilding(root, createGenericBuilding({ width:11, depth:10, height:10.8, body:MAT.paint_teal, trim:MAT.paint_cream, accent:MAT.paint_coral, rows:2, cols:3, roof:'garden', seed:93, signTex:null }), 15.0, 31.0, rightRot+.06, 11, 10);
@@ -283,6 +383,34 @@ export function buildCity(scene, renderer) {
     const b = createGenericBuilding({ width:w, depth:14, height:h, body:[MAT.paint_pink,MAT.paint_lavender,MAT.paint_butter,MAT.paint_aqua,MAT.paint_coral][i%5], trim:MAT.paint_cream, accent:MAT.paint_teal, rows:1, cols:4, roof:'garden', seed:120+i, signTex:null });
     addBuilding(root, b, side*(27 + (i%3)*7), z, side<0?leftRot:rightRot, w, 14);
   }
+
+  // ── south extension shops: every name/sign is unique ─────
+  const EXT_SHOPS = [
+    { x:-16.6, z:-120, w:16, d:10, h:23, body:MAT.paint_violet, trim:MAT.paint_cream, accent:MAT.paint_pink, roof:'ring',   seed:201, rows:5, cols:5, cornerTower:true, name:'LICORICE', bg:'#8b6fd6' },
+    { x:-16.8, z:-141, w:18, d:11, h:26, body:MAT.paint_mint,   trim:MAT.paint_rose,  accent:MAT.paint_cream,roof:'sundae', seed:202, rows:5, cols:5, balconyRow:2, name:'PEPPERMINT', bg:'#58c7c2' },
+    { x:-17.2, z:-181, w:18, d:12, h:25, body:MAT.paint_peach,  trim:MAT.paint_cream, accent:MAT.paint_teal, roof:'donut',  seed:203, rows:5, cols:5, cornerTower:true, name:'CARAMEL', bg:'#d69a58' },
+    { x:-17.0, z:-198, w:16, d:10, h:21, body:MAT.paint_butter, trim:MAT.paint_coral, accent:MAT.paint_blue, roof:'garden', seed:204, rows:4, cols:5, name:'NOUGAT', bg:'#f0c46a' },
+    { x: 16.9, z:-118, w:17, d:11, h:24, body:MAT.paint_blue,   trim:MAT.paint_cream, accent:MAT.paint_butter, roof:'garden', seed:211, rows:5, cols:5, cornerTower:true, name:'SHERBET', bg:'#ff9f7a' },
+    { x: 16.6, z:-139, w:16, d:10, h:22, body:MAT.paint_rose,   trim:MAT.paint_cream, accent:MAT.paint_teal, roof:'rocket', seed:212, rows:5, cols:5, name:'LOLLIPOP', bg:'#ff7aa2' },
+    { x: 17.2, z:-181, w:18, d:12, h:27, body:MAT.paint_lavender,trim:MAT.paint_cream, accent:MAT.paint_coral, roof:'ring',  seed:213, rows:6, cols:5, cornerTower:true, name:'BONBON', bg:'#b48ae8' },
+    { x: 16.8, z:-198, w:16, d:10, h:23, body:MAT.paint_aqua,   trim:MAT.paint_cream, accent:MAT.paint_magenta,roof:'sundae',seed:214, rows:5, cols:5, name:'TOFFEE', bg:'#d18a4e' }
+  ];
+  for (const s of EXT_SHOPS) {
+    const b = createGenericBuilding({
+      width:s.w, depth:s.d, height:s.h, body:s.body, trim:s.trim, accent:s.accent,
+      rows:s.rows, cols:s.cols, roof:s.roof, seed:s.seed, cornerTower:!!s.cornerTower,
+      balconyRow:s.balconyRow ?? -1, sideFacade:true, signTex:shopSign(s.name, s.bg)
+    });
+    addBuilding(root, b, s.x, s.z, s.x < 0 ? leftRot : rightRot, s.w, s.d);
+  }
+
+  // ── new district landmarks ────────────────────────────────
+  const clockTower = createClockTower();
+  clockTower.position.set(-10, 0, -214); root.add(clockTower);
+  colliders.push({ kind:'box', x:-10, z:-214, hx:6, hz:6, rot:0 });
+  const candyWheel = createCandyWheel();
+  candyWheel.position.set(21, 0, -160); root.add(candyWheel);
+  colliders.push({ kind:'circle', x:21, z:-160, r:4.6 });
 
   // vertical blade sign near the left dome, like a beacon for the street
   const blade = new THREE.Group();
@@ -363,6 +491,72 @@ export function buildCity(scene, renderer) {
     vg.position.set(9.6,.14, i? -6.5: 2.0); vg.rotation.y=-.15; root.add(vg); colliders.push({kind:'box',x:9.6,z:i?-6.5:2.0,hx:.5,hz:.4,rot:-.15,top:1.7});
   }
 
+  // ── south district street clutter ─────────────────────────
+  const extLampZ = [-116, -134, -152, -170, -188];
+  extLampZ.forEach((z, i) => {
+    const side = i % 2 ? 1 : -1;
+    const l = createLamp(800 + i, i % 3 ? 7.4 : 6.8);
+    l.position.set(side * 5.9, .13, z); l.rotation.y = side < 0 ? 0 : Math.PI;
+    root.add(l); colliders.push({ kind:'circle', x:side*5.9, z, r:.3 });
+  });
+  const extTrees = [[-8.1,-118,1.05],[-8.3,-136,1.15],[8.2,-124,1.0],[8.0,-146,1.1],[-8.2,-172,.95],[8.1,-176,1.05],[-8.0,-190,1.0],[8.2,-192,.9]];
+  extTrees.forEach(([x,z,s], i) => {
+    const t = createTree(820 + i, i % 3 === 1 ? 'pink' : 'puff', s);
+    t.position.set(x, .12, z); t.rotation.y = (i * 1.3) % TAU; root.add(t);
+    colliders.push({ kind:'circle', x, z, r:.36*s });
+  });
+  for (const [x,z,s] of [[-7.6,-126,.9],[7.6,-132,.85],[-7.7,-150,1.0],[7.7,-166,.9],[-7.6,-184,.95],[7.6,-188,.85]]) {
+    const p = createShrubPlanter(920 + Math.round(x*7 + z), s);
+    p.position.set(x, .14, z); root.add(p);
+    colliders.push({ kind:'circle', x, z, r:.8*s });
+  }
+  for (const [x,z,a] of [[-8.8,-122,Math.PI/2],[-8.9,-142,Math.PI/2],[8.8,-128,-Math.PI/2],[8.9,-168,-Math.PI/2],[-8.8,-182,Math.PI/2],[8.9,-190,-Math.PI/2]]) {
+    const b = createBench(700 + Math.round(x*3 + z)); b.position.set(x, .15, z); b.rotation.y = a; root.add(b);
+    colliders.push({ kind:'box', x, z, hx:.95, hz:.5, rot:a, top:.55 });
+  }
+  const extCars = [
+    ['#e33b4c', -4.1, -115, Math.PI], ['#f0b948', 4.0, -126, 0],
+    ['#2d94c8', -3.9, -137, Math.PI], ['#ef9d3f', 4.0, -148, 0],
+    ['#7bc96f', -4.2, -158, Math.PI], ['#c77bd8', 4.0, -170, 0],
+    ['#ff8c69', -4.0, -179, Math.PI], ['#5aa9e6', 4.1, -191, 0]
+  ];
+  extCars.forEach(([color, x, z, ry], i) => {
+    const c = createCar(color, 10 + i); c.position.set(x, .02, z); c.rotation.y = ry; root.add(c);
+    colliders.push({ kind:'box', x, z, hx:.95, hz:2.2, rot:ry, top:1.28 });
+  });
+  for (const [x,z] of [[8.9,-112],[-8.9,-131],[8.9,-151],[-8.9,-177],[8.9,-196]]) {
+    const s = createScooter(x < 0 ? '#20b4b7' : '#e45c70'); s.position.set(x,.13,z); s.rotation.y = x < 0 ? Math.PI-.15 : .2; root.add(s);
+    colliders.push({ kind:'circle', x, z, r:.45, top:.78 });
+  }
+  for (const [x,z,i] of [[8.6,-128,0],[8.7,-168,1]]) {
+    const cafe = createCafeSet(30 + i, i ? MAT.awningMint : MAT.awningBlue);
+    cafe.position.set(x,.14,z); root.add(cafe);
+    colliders.push({ kind:'circle', x, z, r:1.5 });
+  }
+  for (let i=0;i<2;i++){
+    const vg = new THREE.Group();
+    add(vg, rBox(.9,1.7,.65,.08,3), i ? MAT.paint_blue : MAT.paint_coral, [0,.85,0]);
+    add(vg, rBox(.7,1.1,.03,.02), MAT.glassWarm, [0,1.02,.34]);
+    vg.position.set(9.6,.14, i ? -154 : -114); vg.rotation.y = -.15; root.add(vg);
+    colliders.push({ kind:'box', x:9.6, z:i?-154:-114, hx:.5, hz:.4, rot:-.15, top:1.7 });
+  }
+  {
+    const extB = [];
+    for (let z=-112; z>-198; z-=2.8) { extB.push({x:-6.1,y:.15,z,scale:1}); extB.push({x:6.1,y:.15,z,scale:1}); colliders.push({kind:'circle',x:-6.1,z,r:.2,top:.78}); colliders.push({kind:'circle',x:6.1,z,r:.2,top:.78}); }
+    root.add(makeInstanced(new THREE.CylinderGeometry(.13,.17,.85,12), bmat, extB, true, true));
+    root.add(makeInstanced(torus(.14,.025,5,16), MAT.gold, extB.map(b => ({x:b.x,y:b.y+.55,z:b.z,rot:[Math.PI/2,0,0]})), false, false));
+  }
+  for (const [z, seed] of [[-122,31],[-146,32],[-170,33],[-192,34]]) {
+    const p = createPennantLine(V(-7.2,8.8,z), V(7.2,8.5,z), seed, 15, .75);
+    root.add(p.group); flagUpdaters.push(p.update);
+  }
+  {
+    const cart2 = createCandyCart();
+    cart2.group.position.set(4.2,.03,-146); cart2.group.rotation.y = Math.PI - .10; root.add(cart2.group); markDynamic(cart2.group);
+    colliders.push({kind:'box',x:4.2,z:-146,hx:1.45,hz:1.1,rot:Math.PI-.10});
+    updaters.push(t=>{ cart2.balloons.forEach((b,i)=>{ b.position.y = b.userData.baseY + Math.sin(t*1.2+i*1.1)*.035; b.rotation.z = Math.sin(t*.7+i)*.05; }); });
+  }
+
   // fountain and its court
   const fountain=createFountain(); fountain.group.position.set(0,0,-72); root.add(fountain.group); colliders.push({kind:'circle',x:0,z:-72,r:8.8}); markDynamic(fountain.group); updaters.push(t=>fountain.update(t));
   for(let i=0;i<6;i++){
@@ -378,7 +572,7 @@ export function buildCity(scene, renderer) {
 
   // gate bridge and skyline
   // the open avenue deliberately leads all the way to the fountain court
-  const palace = createSunPalace(); palace.position.set(-4,0,-132); root.add(palace);
+  const palace = createSunPalace(); palace.position.set(-4,0,-238); root.add(palace);
   // grand ending arch
   const arch = new THREE.Group();
   for(const side of [-1,1]){
@@ -407,14 +601,21 @@ export function buildCity(scene, renderer) {
 
   // pedestrians
   const peopleSpecs = [
-    [7.2,.14,13.0,-1,'#ff6e76','#294c68',1.15],[8.2,.14,7.0,-1,'#f6c948','#8a5b85',.95],
-    [-7.2,.14,4.0,1,'#5dc6c0','#e2ceb1',1.05],[-8.2,.14,-12.0,1,'#b49ae8','#38445d',.9],
-    [7.6,.14,-20.0,-1,'#ff9db7','#5b3d57',1.1],[-7.6,.14,-40.0,-1,'#6faee8','#f1e2c8',1.0],
-    [8.2,.14,-55.0,1,'#ffb35c','#3c5b64',1.0],[-7.2,.14,16.5,-1,'#8fdcad','#8d4f58',.9]
+    [7.2,.14,13.0,-1,'#ff6e76','#294c68',1.15,-55,40],[8.2,.14,7.0,-1,'#f6c948','#8a5b85',.95,-55,40],
+    [-7.2,.14,4.0,1,'#5dc6c0','#e2ceb1',1.05,-55,40],[-8.2,.14,-12.0,1,'#b49ae8','#38445d',.9,-55,40],
+    [7.6,.14,-20.0,-1,'#ff9db7','#5b3d57',1.1,-55,40],[-7.6,.14,-40.0,-1,'#6faee8','#f1e2c8',1.0,-55,40],
+    [8.2,.14,-55.0,1,'#ffb35c','#3c5b64',1.0,-55,40],[-7.2,.14,16.5,-1,'#8fdcad','#8d4f58',.9,-55,40],
+    // south district walkers
+    [7.4,.14,-116,-1,'#ffd166','#4a3b52',1.05,-200,-110],[8.2,.14,-124,1,'#a0e7e5','#35525c',.95,-200,-110],
+    [-7.6,.14,-132,-1,'#f78fb3','#5b3d57',1.1,-200,-110],[-8.2,.14,-140,1,'#c3a6ff','#3a3550',1.0,-200,-110],
+    [7.8,.14,-148,-1,'#ffb37a','#4b3a35',.9,-200,-110],[-7.4,.14,-156,1,'#9ef0c0','#3a5148',1.15,-200,-110],
+    [8.4,.14,-164,-1,'#7fc8f8','#2f4356',1.0,-200,-110],[-8.0,.14,-172,1,'#ff9db7','#5b3d57',.95,-200,-110],
+    [7.4,.14,-180,-1,'#ffe08a','#514730',1.05,-200,-110],[-7.8,.14,-188,1,'#b8b8ff','#3b3b58',.9,-200,-110],
+    [8.0,.14,-196,-1,'#8fdcad','#35513f',1.1,-200,-110],[-7.2,.14,-112,1,'#ff8c69','#543229',1.0,-200,-110]
   ];
-  peopleSpecs.forEach(([x,y,z,dir,c1,c2,speed],i)=>{
+  peopleSpecs.forEach(([x,y,z,dir,c1,c2,speed,zMin,zMax],i)=>{
     // the model is authored facing +Z, so rotation 0 means "walking towards +Z"
-    const p=createPerson(900+i,[c1,c2]); p.position.set(x,y,z); p.rotation.y=dir>0?0:Math.PI; p.userData.phase=i*1.7; p.userData.dir=dir; p.userData.speed=speed; p.userData.startZ=z; p.userData.walkZ=z; p.userData.laneX=x;
+    const p=createPerson(900+i,[c1,c2]); p.position.set(x,y,z); p.rotation.y=dir>0?0:Math.PI; p.userData.phase=i*1.7; p.userData.dir=dir; p.userData.speed=speed; p.userData.startZ=z; p.userData.walkZ=z; p.userData.laneX=x; p.userData.zMin=zMin; p.userData.zMax=zMax;
     // moving props are excluded from the baked shadow map, so each one carries
     // its own soft ground contact patch instead of a frozen long shadow
     const cs=contactShadow(1.7,1.7,.34); cs.position.y=.012; p.add(cs);
@@ -426,8 +627,9 @@ export function buildCity(scene, renderer) {
     pedestrians.forEach((p,i)=>{
       const dir=p.userData.dir, speed=p.userData.speed;
       let z=p.userData.startZ + dir*t*speed*1.6;
-      const span=95;
-      z = -55 + ((z+55)%span+span)%span;
+      const zMin=p.userData.zMin, zMax=p.userData.zMax;
+      const span=zMax-zMin;
+      z = zMin + (((z-zMin)%span)+span)%span;
       p.position.x += (p.userData.laneX - p.position.x) * .035;
       p.position.z = z;
       resolveCollisions(p.position, .28, colliders);

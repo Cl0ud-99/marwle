@@ -8,7 +8,7 @@
 
 [**Live preview**](https://cl0ud-99.github.io/marwle/) — runs in the browser, nothing to install.
 
-A playable candy-city street: one long boulevard, a mirrored water lane, a fountain court and a painted sunset. Built in Three.js, but every building, sign, cloud, prop and sound in the scene is generated from code at load time. No model files, no imported HDRIs, no external audio.
+A playable candy-city street: two linked districts on a 300 m boulevard, a mirrored water lane, a fountain court and a painted sunset. Built in Three.js, but every building, sign, cloud, prop and sound in the scene is generated from code at load time. No model files, no imported HDRIs, no external audio.
 
 ![hero](docs/shots/hero.jpg)
 
@@ -18,6 +18,7 @@ A playable candy-city street: one long boulevard, a mirrored water lane, a fount
 |---|---|
 | ![title](docs/shots/title.jpg) | ![explore](docs/shots/explore.jpg) |
 | ![fountain](docs/shots/fountain.jpg) | ![water](docs/shots/water.jpg) |
+| ![south district](docs/shots/south.jpg) | |
 
 ## What it is
 
@@ -46,7 +47,7 @@ A conventional forward renderer, but tuned around three things: reflections, bak
              │
              └──> scene background
 
-static city (≈4.5M tris at high detail)
+static city (≈7.3M tris at high detail)
    ├──> sun shadow map, baked once (1024² / 3072² / 4096² by preset)
    ├──> planar reflection RT (scaled 0.7–1.5×, 1–4 frame cadence, layer 0 only)
    └──> HDR scene RT (0–4× MSAA) → optional GTAO → optional DOF
@@ -55,18 +56,19 @@ HDR scene
    ├──> bloom
    ├──> radial sun rays
    └──> composite: lens distortion, chromatic fringe,
-        ACES, split-tone grade, vignette, film grain, sRGB
+        AgX, split-tone grade, vignette, film grain, sRGB
 ```
 
 Details worth reading:
 
-- **The shadow map is baked once.** The architecture is static, so the sun shadow map is rendered during the first frame and then frozen. Its resolution follows the quality preset (1024² draft, 3072² standard, 4096² cinematic/photo), and the ortho box is trimmed to the playable corridor.
+- **The shadow map is baked once.** The architecture is static, so the sun shadow map is rendered during the first frame and then frozen. Its resolution follows the quality preset (1024² draft, 3072² standard, 4096² cinematic/photo), and the ortho box covers the full extended avenue.
 - **Planar reflections are throttled and layer-culled.** The mirror camera renders only the static layer; the reflection scale and cadence follow the quality preset. Moving props live on layer 1 and stay out of the reflection pass entirely, which removes a large slice of draw calls.
 - **The grade is AgX.** The final pass uses the Filament/Blender AgX curve with a re-tuned exposure, saturation and contrast, so marquee bulbs and sun glints roll off instead of clipping to white. `?tonemap=aces` restores the older ACES curve for comparison.
 - **Photo mode is a different renderer.** `?shot=` and the `P` key switch to the photo preset: higher device pixel ratio, 4096² shadows, full-rate reflections, GTAO and a subtle depth-of-field pass focused per composed shot, so stills are much cleaner than the walk view.
 - **The shader rejects early.** The mirror plane is much larger than the area that can ever be wet, so the fragment shader discards anything outside the canal and pool bounds before it runs the noise and reflection taps.
 - **Reflection is masked, not global.** One mirror RT drives both the water lane and the plaza pool, plus the damp road sheen. The shader masks by world position so asphalt stays matte and the canal reads as wet.
-- **The whole static city is merged by material.** Hundreds of authored meshes collapse into roughly sixty draw calls; the remaining draw calls are moving characters, sprites, signs and transparent glass.
+- **The avenue doubled.** Past the welcome arch the street continues for another ~100 m: eight new storefronts, all with unique names and signs, a clock tower terminus, a candy ferris wheel, eight more parked cars, more carts, scooters, cafés, trees, pennants and 20 pedestrians in total.
+- **Static geometry is batched by material.** Opaque walls, mouldings and paving collapse into material batches; the remaining draw calls are moving characters, signs, transparent glass and sprites.
 - **Moving props are merged in local space.** A pedestrian, cart, fountain or drone keeps one root transform for animation while its bodywork collapses into a handful of per-material meshes.
 - **Collision is volumetric, not a rail.** The walk camera and every pedestrian resolve their radius against building footprints, cars, the candy cart, benches, planters, lamps, bollards and the fountain. NPC lanes sit on the sidewalk and are gently pulled back to them, so walkers slide around obstacles instead of clipping through walls.
 - **Low things are standable.** Colliders carry a top height: the camera steps onto the water slabs and can jump onto benches, bollards and car roofs, then walks off the edge and falls. The rill and pool block entry, except across the five stepping stones.
