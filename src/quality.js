@@ -5,22 +5,22 @@ export const PRESETS = {
   draft: {
     dpr: .85, shadowMap: 1024, msaa: 0,
     reflectionScale: .7, reflectEvery: 4,
-    bloom: .18, ao: false, aoIntensity: 0,
+    bloom: .18, ao: false, aoIntensity: 0, dof: false,
   },
   standard: {
     dpr: 1.35, shadowMap: 3072, msaa: 2,
     reflectionScale: 1, reflectEvery: 3,
-    bloom: .22, ao: false, aoIntensity: 0,
+    bloom: .22, ao: false, aoIntensity: 0, dof: false,
   },
   cinematic: {
     dpr: 1.5, shadowMap: 4096, msaa: 4,
     reflectionScale: 1.25, reflectEvery: 2,
-    bloom: .24, ao: true, aoIntensity: .55,
+    bloom: .24, ao: true, aoIntensity: .55, dof: false,
   },
   photo: {
     dpr: 1.75, shadowMap: 4096, msaa: 4,
     reflectionScale: 1.5, reflectEvery: 1,
-    bloom: .24, ao: true, aoIntensity: .7,
+    bloom: .24, ao: true, aoIntensity: .7, dof: true,
   },
 };
 

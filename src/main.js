@@ -136,12 +136,12 @@ async function boot() {
 
   // ── presentation camera moves ──────────────────────────────
   const SHOTS = {
-    hero:   { pos:[1.2, 2.4, 27.5], target:[0.0, 8.2, -38.0], fov:62 },
-    street: { pos:[1.2, 2.0, 19.0], target:[0.2, 4.8, -36.0], fov:62 },
-    sign:   { pos:[3.2, 4.3, 19.0], target:[11.5, 9.2, 4.0],  fov:52 },
-    water:  { pos:[0.5, .74, 1.5],   target:[-.3, 3.1, -43.0], fov:48 },
-    fountain:{pos:[0.0, 2.9, -52.0], target:[0, 4.8, -72.0],   fov:52 },
-    skyline:{ pos:[0.0, 18.0, 18.0], target:[0.0, 14.0, -120.0], fov:55 }
+    hero:   { pos:[1.2, 2.4, 27.5], target:[0.0, 8.2, -38.0], fov:62, focus:18 },
+    street: { pos:[1.2, 2.0, 19.0], target:[0.2, 4.8, -36.0], fov:62, focus:12 },
+    sign:   { pos:[3.2, 4.3, 19.0], target:[11.5, 9.2, 4.0],  fov:52, focus:17 },
+    water:  { pos:[0.5, .74, 1.5],   target:[-.3, 3.1, -43.0], fov:48, focus:9 },
+    fountain:{pos:[0.0, 2.9, -52.0], target:[0, 4.8, -72.0],   fov:52, focus:18 },
+    skyline:{ pos:[0.0, 18.0, 18.0], target:[0.0, 14.0, -120.0], fov:55, focus:70 }
   };
   let mode = 'intro';
   let cinemaStart = 0;
@@ -156,6 +156,7 @@ async function boot() {
     camera.position.set(...s.pos);
     camera.fov = s.fov; camera.updateProjectionMatrix();
     camera.lookAt(new THREE.Vector3(...s.target));
+    if (post.setFocus) post.setFocus(s.focus ?? 18);
   }
 
   function cinematicAt(t) {
@@ -219,6 +220,7 @@ async function boot() {
     player.pos.set(2.0, 1.72, 26.4);
     player.yaw = -.01; player.pitch = .015; player.vel.set(0,0,0);
     player.y = 0; player.vy = 0; player.grounded = true; player.land = 0;
+    if (post.setFocus) post.setFocus(12);
     camera.position.copy(player.pos);
     camera.fov = 60; camera.updateProjectionMatrix();
     camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { MAT, TEX } from './materials.js';
 import {
   rBox, mesh, plane, cyl, sphere, rng, TAU, canvasTexture, textTexture,
-  makeInstanced, mergeStatic, setShadows, roundRect,
+  makeInstanced, mergeStatic, setShadows, roundRect, DETAIL, setDetail,
   torus
 } from './utils.js';
 import {
@@ -178,9 +178,15 @@ export function buildCity(scene, renderer) {
 
   // ── building rows ──────────────────────────────────────────
   const leftRot = Math.PI/2 - .10, rightRot = -Math.PI/2 + .10;
+  // hero LOD: only the three landmark buildings get the ultra tessellation
+  // tier; every other block stays on the cheaper base tier
+  const baseDetail = DETAIL.level;
+  const heroDetail = baseDetail === 'high' ? 'ultra' : baseDetail;
+  setDetail(heroDetail);
   const fizz = addBuilding(root, createFizzDome(), -16.0, 8.4, leftRot-.13);
   const dream = addBuilding(root, createDreamTower(), -17.2, -16.5, leftRot-.04);
   const marwle = addBuilding(root, createMarwleHall(), 16.2, 4.0, rightRot+.18);
+  setDetail(baseDetail);
   const l3 = addBuilding(root, createGenericBuilding({ width:16, depth:10, height:18.5, body:MAT.paint_butter, trim:MAT.paint_coral, accent:MAT.paint_teal, rows:4, cols:5, roof:'garden', seed:13, signTex:TEX.candy, cornerTower:true }), -16.0, -37.5, leftRot);
   const r2 = addBuilding(root, createGenericBuilding({ width:17, depth:11, height:21, body:MAT.paint_coral, trim:MAT.paint_cream, accent:MAT.paint_blue, rows:5, cols:5, roof:'sundae', seed:24, signTex:TEX.soda, balconyRow:2 }), 16.7, -17.0, rightRot);
   const l4 = addBuilding(root, createGenericBuilding({ width:18, depth:12, height:23, body:MAT.paint_lavender, trim:MAT.paint_butter, accent:MAT.paint_coral, rows:5, cols:5, roof:'donut', seed:35, signTex:TEX.dream, cornerTower:true }), 17.0, -39.5, rightRot);

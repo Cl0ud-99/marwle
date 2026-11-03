@@ -5,6 +5,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 
 const SunRaysShader = {
   uniforms: {
@@ -164,6 +165,20 @@ export function createPost(renderer, scene, camera, options = {}) {
   composer.addPass(bloom);
   const rays = new RaysPass(window.innerWidth, window.innerHeight);
   composer.addPass(rays);
+  // Depth of field is photo-only: it renders a depth prepass, so there is no
+  // reason to pay for it while walking.
+  const bokeh = new BokehPass(scene, camera, { focus: 18, aperture: .00012, maxblur: .0042 });
+  bokeh.enabled = false;
+  if (mirror) {
+    const renderBokeh = bokeh.render.bind(bokeh);
+    bokeh.render = function (renderer, writeBuffer, readBuffer) {
+      const visible = mirror.visible;
+      mirror.visible = false;
+      try { renderBokeh(renderer, writeBuffer, readBuffer); }
+      finally { mirror.visible = visible; }
+    };
+  }
+  composer.addPass(bokeh);
   const final = new ShaderPass(new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.clone(FinalShader.uniforms), vertexShader: FinalShader.vertexShader, fragmentShader: FinalShader.fragmentShader }));
   final.renderToScreen = true;
   composer.addPass(final);
@@ -192,6 +207,10 @@ export function createPost(renderer, scene, camera, options = {}) {
     bloom.strength = q.bloom;
     gtao.enabled = !!q.ao;
     if (q.ao) gtao.blendIntensity = q.aoIntensity ?? .5;
+    bokeh.enabled = !!q.dof;
   }
-  return { composer, bloom, rays, final, renderPass, gtao, update, resize, setQuality };
+  function setFocus(d) {
+    bokeh.uniforms.focus.value = d;
+  }
+  return { composer, bloom, rays, final, renderPass, gtao, bokeh, update, resize, setQuality, setFocus };
 }
