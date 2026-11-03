@@ -47,7 +47,7 @@ A conventional forward renderer, but tuned around three things: reflections, bak
              │
              └──> scene background
 
-static city (≈7.3M tris at high detail)
+static city (≈10.2M tris at high detail)
    ├──> sun shadow map, baked once (1024² / 3072² / 4096² by preset)
    ├──> planar reflection RT (scaled 0.7–1.5×, 1–4 frame cadence, layer 0 only)
    └──> HDR scene RT (0–4× MSAA) → optional GTAO → optional DOF
@@ -67,7 +67,7 @@ Details worth reading:
 - **Photo mode is a different renderer.** `?shot=` and the `P` key switch to the photo preset: higher device pixel ratio, 4096² shadows, full-rate reflections, GTAO and a subtle depth-of-field pass focused per composed shot, so stills are much cleaner than the walk view.
 - **The shader rejects early.** The mirror plane is much larger than the area that can ever be wet, so the fragment shader discards anything outside the canal and pool bounds before it runs the noise and reflection taps.
 - **Reflection is masked, not global.** One mirror RT drives both the water lane and the plaza pool, plus the damp road sheen. The shader masks by world position so asphalt stays matte and the canal reads as wet.
-- **The avenue doubled.** Past the welcome arch the street continues for another ~100 m: eight new storefronts, all with unique names and signs, a JOY-faced palace at the south terminus, a candy ferris wheel, eight more parked cars, more carts, scooters, cafés, trees, pennants and 20 pedestrians in total. A gatehouse clock tower fills the empty alley behind the opening spawn, so turning around at the start now has a landmark instead of a bare horizon.
+- **The avenue doubled.** Past the welcome arch the street continues for another ~100 m: eight new storefronts, all with unique names and signs, a JOY-faced palace at the south terminus, a candy ferris wheel, eight more parked cars, more carts, scooters, cafés, trees, pennants and 20 pedestrians in total. A gatehouse clock tower fills the empty alley behind the opening spawn, so turning around at the start now has a landmark instead of a bare horizon. Twenty-five infill buildings — narrow alley houses, terraces, corner blocks, gate wings and low annexes — close the remaining skyline slots between the major blocks.
 - **Static geometry is batched by material.** Opaque walls, mouldings and paving collapse into material batches; the remaining draw calls are moving characters, signs, transparent glass and sprites.
 - **Moving props are merged in local space.** A pedestrian, cart, fountain or drone keeps one root transform for animation while its bodywork collapses into a handful of per-material meshes.
 - **Collision is volumetric, not a rail.** The walk camera and every pedestrian resolve their radius against building footprints, cars, the candy cart, benches, planters, lamps, bollards and the fountain. NPC lanes sit on the sidewalk and are gently pulled back to them, so walkers slide around obstacles instead of clipping through walls.

@@ -418,14 +418,55 @@ export function buildCity(scene, renderer) {
     addBuilding(root, b, s.x, s.z, s.x < 0 ? leftRot : rightRot, s.w, s.d);
   }
 
+  // ── infill: close the skyline holes between the main blocks ──
+  // Each gap gets a different type: narrow alley house, mid terrace,
+  // wide corner block, or a low gate wing by the clock tower.
+  const INFILL = [
+    { side:-1, x:-16.5, z:40.0,  w:8.0,  d:10, h:13, rows:2, cols:2, roof:'garden', body:MAT.paint_rose,     trim:MAT.paint_cream, accent:MAT.paint_teal,    seed:301 },
+    { side: 1, x: 16.5, z:40.0,  w:8.0,  d:10, h:13, rows:2, cols:2, roof:'ring',   body:MAT.paint_aqua,     trim:MAT.paint_cream, accent:MAT.paint_magenta, seed:302 },
+    { side:-1, x:-16.2, z:18.9,  w:8.4,  d:10, h:16, rows:3, cols:3, roof:'garden', body:MAT.paint_butter,   trim:MAT.paint_coral, accent:MAT.paint_teal,    seed:303 },
+    { side:-1, x:-16.6, z:-4.5,  w:6.6,  d:9,  h:12.5, rows:2, cols:2, roof:'ring', body:MAT.paint_lavender, trim:MAT.paint_cream, accent:MAT.paint_pink,    seed:304 },
+    { side:-1, x:-16.8, z:-103,  w:12.4, d:11, h:22, rows:4, cols:4, roof:'donut',  body:MAT.paint_mint,     trim:MAT.paint_rose,  accent:MAT.paint_butter,  seed:305, cornerTower:true },
+    { side:-1, x:-16.8, z:-152,  w:11.0, d:10, h:19, rows:3, cols:4, roof:'sundae', body:MAT.paint_peach,    trim:MAT.paint_cream, accent:MAT.paint_teal,    seed:306 },
+    { side:-1, x:-16.9, z:-166,  w:11.0, d:10, h:23, rows:4, cols:4, roof:'rocket', body:MAT.paint_blue,     trim:MAT.paint_coral, accent:MAT.paint_butter,  seed:307, cornerTower:true },
+    { side: 1, x: 16.6, z:13.0,  w:8.0,  d:10, h:15, rows:2, cols:3, roof:'garden', body:MAT.paint_rose,     trim:MAT.paint_cream, accent:MAT.paint_teal,    seed:311 },
+    { side: 1, x: 16.7, z:21.5,  w:8.0,  d:10, h:18, rows:3, cols:3, roof:'ring',   body:MAT.paint_aqua,     trim:MAT.paint_cream, accent:MAT.paint_coral,   seed:312 },
+    { side: 1, x: 16.6, z:-6.2,  w:9.8,  d:10, h:17, rows:3, cols:3, roof:'sundae', body:MAT.paint_coral,    trim:MAT.paint_cream, accent:MAT.paint_blue,    seed:313 },
+    { side: 1, x: 16.9, z:-101,  w:11.0, d:11, h:21, rows:4, cols:4, roof:'garden', body:MAT.paint_violet,   trim:MAT.paint_cream, accent:MAT.paint_butter,  seed:314, cornerTower:true },
+    { side: 1, x: 16.7, z:-149,  w:10.0, d:10, h:18, rows:3, cols:4, roof:'donut',  body:MAT.paint_mint,     trim:MAT.paint_cream, accent:MAT.paint_coral,   seed:315 },
+    { side: 1, x: 16.8, z:-169.5,w:10.0, d:10, h:22, rows:4, cols:4, roof:'ring',   body:MAT.paint_butter,   trim:MAT.paint_rose,  accent:MAT.paint_teal,    seed:316, cornerTower:true },
+    // low annexes tie the clock tower into the gate wings and close the last
+    // sliver of horizon beside its base
+    { side:-1, x:-8.8,  z:44.0,  w:5.6,  d:5,  h:9,  rows:1, cols:2, roof:'garden', body:MAT.paint_cream,    trim:MAT.paint_coral, accent:MAT.paint_teal,    seed:321 },
+    { side: 1, x: 8.8,  z:44.0,  w:5.6,  d:5,  h:9,  rows:1, cols:2, roof:'ring',   body:MAT.paint_peach,    trim:MAT.paint_cream, accent:MAT.paint_magenta, seed:322 },
+    // remaining slots: narrow terrace houses / studio blocks, each different
+    { side:-1, x:-16.5, z:-27.0, w:10.4, d:10, h:19, rows:3, cols:3, roof:'ring',   body:MAT.paint_peach,    trim:MAT.paint_cream, accent:MAT.paint_teal,    seed:331 },
+    { side:-1, x:-16.7, z:-47.5, w:9.4,  d:10, h:15, rows:2, cols:3, roof:'garden', body:MAT.paint_aqua,     trim:MAT.paint_cream, accent:MAT.paint_coral,   seed:332 },
+    { side:-1, x:-17.0, z:-71.0, w:12.4, d:11, h:20, rows:4, cols:4, roof:'sundae', body:MAT.paint_coral,    trim:MAT.paint_cream, accent:MAT.paint_blue,    seed:333 },
+    { side:-1, x:-16.6, z:-130.0,w:9.8,  d:10, h:17, rows:3, cols:3, roof:'donut',  body:MAT.paint_lavender, trim:MAT.paint_cream, accent:MAT.paint_butter,  seed:334 },
+    { side:-1, x:-16.9, z:-190.0,w:5.6,  d:9,  h:13, rows:2, cols:2, roof:'ring',   body:MAT.paint_butter,   trim:MAT.paint_coral, accent:MAT.paint_teal,    seed:335 },
+    { side: 1, x: 16.8, z:-28.0, w:10.4, d:10, h:20, rows:3, cols:3, roof:'garden', body:MAT.paint_blue,     trim:MAT.paint_cream, accent:MAT.paint_butter,  seed:336 },
+    { side: 1, x: 16.5, z:-49.5, w:7.4,  d:9,  h:16, rows:2, cols:2, roof:'ring',   body:MAT.paint_mint,     trim:MAT.paint_cream, accent:MAT.paint_magenta, seed:337 },
+    { side: 1, x: 17.1, z:-71.7, w:11.8, d:11, h:19, rows:3, cols:4, roof:'donut',  body:MAT.paint_rose,     trim:MAT.paint_cream, accent:MAT.paint_teal,    seed:338 },
+    { side: 1, x: 16.9, z:-128.7,w:9.8,  d:10, h:18, rows:3, cols:3, roof:'sundae', body:MAT.paint_violet,   trim:MAT.paint_cream, accent:MAT.paint_coral,   seed:339 },
+    { side: 1, x: 16.7, z:-190.0,w:5.6,  d:9,  h:13, rows:2, cols:2, roof:'garden', body:MAT.paint_aqua,     trim:MAT.paint_cream, accent:MAT.paint_pink,    seed:340 }
+  ];
+  for (const s of INFILL) {
+    const b = createGenericBuilding({
+      width:s.w, depth:s.d, height:s.h, body:s.body, trim:s.trim, accent:s.accent,
+      rows:s.rows, cols:s.cols, roof:s.roof, seed:s.seed, cornerTower:!!s.cornerTower
+    });
+    addBuilding(root, b, s.x, s.z, s.side < 0 ? leftRot : rightRot, s.w, s.d);
+  }
+
   // ── new district landmarks ────────────────────────────────
   const clockTower = createClockTower();
   // the clock tower fills the empty north alley behind the opening spawn
   clockTower.position.set(0, 0, 44); root.add(clockTower);
   colliders.push({ kind:'box', x:0, z:44, hx:6, hz:6, rot:0 });
   const candyWheel = createCandyWheel();
-  candyWheel.position.set(21, 0, -160); root.add(candyWheel);
-  colliders.push({ kind:'circle', x:21, z:-160, r:4.6 });
+  candyWheel.position.set(27.5, 0, -160); root.add(candyWheel);
+  colliders.push({ kind:'circle', x:27.5, z:-160, r:4.6 });
 
   // vertical blade sign near the left dome, like a beacon for the street
   const blade = new THREE.Group();
