@@ -322,16 +322,8 @@ export function buildCity(scene, renderer) {
     const s = add(root, rBox(3.25,.10,1.15,.06,2), MAT.marble, [0,.075,z], { cast:false });
     colliders.push({ kind:'box', x:0, z, hx:1.6, hz:.58, rot:0, top:.13 });
   }
-  {
-    const edges = [17];
-    for (const z of stepZ) edges.push(z + .72, z - .72);
-    edges.push(-69);
-    for (let i = 0; i < edges.length; i += 2) {
-      const a = edges[i], b = edges[i+1];
-      if (a - b < .4) continue;
-      colliders.push({ kind:'box', x:0, z:(a+b)/2, hx:1.32, hz:(a-b)/2, rot:0 });
-    }
-  }
+  // The canal is visual only: the middle of the street is walkable, with no
+  // volume collider, so nothing invisible blocks the player on the centreline.
 
   // plaza: ring of inlaid paving around the pool
   const plazaMat = new THREE.MeshPhysicalMaterial({ color:'#f2ddc0', roughness:.48, clearcoat:.28, clearcoatRoughness:.36, envMapIntensity:.9 });
