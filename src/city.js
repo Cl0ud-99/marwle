@@ -572,7 +572,8 @@ export function buildCity(scene, renderer) {
 
   // gate bridge and skyline
   // the open avenue deliberately leads all the way to the fountain court
-  const palace = createSunPalace(); palace.position.set(-4,0,-238); root.add(palace);
+  const palace = createSunPalace(); palace.position.set(9,0,-214); root.add(palace);
+  colliders.push({ kind:'box', x:9, z:-214, hx:9, hz:7, rot:0 });
   // grand ending arch
   const arch = new THREE.Group();
   for(const side of [-1,1]){
