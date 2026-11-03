@@ -108,6 +108,10 @@ async function boot() {
   scene.add(bounced);
   const softAmb = new THREE.AmbientLight('#cfe8ef', .012);
   scene.add(softAmb);
+  // warm second bounce from the sunlit paving, lifting undersides and awnings
+  const bounce = new THREE.DirectionalLight('#ffcf9f', .16);
+  bounce.position.set(12, -18, -6);
+  scene.add(bounce);
 
   // subtle long shadows are helped by a very low warm fill
   const low = new THREE.PointLight('#ffb967', 6, 28, 2);

@@ -362,6 +362,40 @@ export function buildCity(scene, renderer) {
   // petals / motes
   const petals=createPetalField(240,[-25,25,-110,25],77); root.add(petals.points); updaters.push(petals.update);
 
+  // volumetric dust: additive motes that catch the low sun. One draw call,
+  // layer 1 so they lift the air without being mirrored by the canal.
+  const dustCount = 520;
+  const dustPos = new Float32Array(dustCount * 3);
+  const dustCol = new Float32Array(dustCount * 3);
+  const dr = rng(778);
+  for (let i = 0; i < dustCount; i++) {
+    dustPos[i*3] = (dr() - .5) * 12;
+    dustPos[i*3+1] = .5 + dr() * 6.0;
+    dustPos[i*3+2] = 24 - dr() * 104;
+    const warm = .7 + dr() * .3;
+    dustCol[i*3] = warm; dustCol[i*3+1] = warm * .92; dustCol[i*3+2] = warm * .78;
+  }
+  const dustGeo = new THREE.BufferGeometry();
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+  dustGeo.setAttribute('color', new THREE.BufferAttribute(dustCol, 3));
+  const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({
+    map: TEX.glow, size: .12, transparent: true, opacity: .6, vertexColors: true,
+    depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false
+  }));
+  dust.name = 'dust-motes';
+  dust.frustumCulled = false; dust.layers.set(1); root.add(dust);
+  const dustBase = dustPos.slice();
+  updaters.push(t => {
+    const a = dustGeo.attributes.position.array;
+    for (let i = 0; i < dustCount; i++) {
+      const ph = i * .73;
+      a[i*3] = dustBase[i*3] + Math.sin(t*.18 + ph) * .5;
+      a[i*3+1] = dustBase[i*3+1] + Math.sin(t*.26 + ph*1.7) * .35;
+      a[i*3+2] = dustBase[i*3+2] + Math.cos(t*.14 + ph) * .6;
+    }
+    dustGeo.attributes.position.needsUpdate = true;
+  });
+
   // rooftop & facade point light pools: warm pockets at street level
   // four warm/cool pockets carry the street lighting; the rest of the glow is
   // emissive bulbs and halo sprites, which cost nothing per fragment

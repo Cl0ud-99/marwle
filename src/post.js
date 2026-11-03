@@ -190,7 +190,7 @@ export function createPost(renderer, scene, camera, options = {}) {
     const sx = tmp.x*.5+.5, sy = tmp.y*.5+.5;
     rays.uniforms.uSun.value.set(sx,sy);
     const inFront = tmp.z < 1 && sx > -.2 && sx < 1.2 && sy > -.2 && sy < 1.2;
-    rays.uniforms.uIntensity.value = inFront ? .16 : 0;
+    rays.uniforms.uIntensity.value = inFront ? .20 : 0;
     rays.uniforms.uTime.value = t;
     final.uniforms.uTime.value = t;
     final.uniforms.uResolution.value.set(renderer.domElement.width, renderer.domElement.height);

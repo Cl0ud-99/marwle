@@ -67,6 +67,7 @@ Details worth reading:
 - **Reflection is masked, not global.** One mirror RT drives both the water lane and the plaza pool, plus the damp road sheen. The shader masks by world position so asphalt stays matte and the canal reads as wet.
 - **The whole static city is merged by material.** Hundreds of authored meshes collapse into roughly sixty draw calls; the remaining draw calls are moving characters, sprites, signs and transparent glass.
 - **Moving props are merged in local space.** A pedestrian, cart, fountain or drone keeps one root transform for animation while its bodywork collapses into a handful of per-material meshes.
+- **Light has a second bounce.** A warm directional fill lifts undersides and awnings, 520 additive dust motes drift through the boulevard as a cheap volumetric cue, and the sun-ray pass is slightly stronger.
 - **Moving props do not bake shadows.** They are excluded from the frozen sun map and carry a soft contact patch instead, so nobody leaves a shadow behind.
 - **Only the three landmarks get the ultra tier.** Hero LOD switches tessellation to `ultra` while building Fizz Dome, Dream Tower and Marwle Hall, then drops back to the base tier for the rest of the street.
 - **Hero windows have real depth.** On the three landmark buildings the glazing sits behind a projecting surround with four reveal jambs and a drip sill, so the sun drops a shadow into the opening. Background rows keep the cheap flat unit.
