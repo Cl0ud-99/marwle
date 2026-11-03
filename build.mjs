@@ -1,27 +1,44 @@
 import { build } from 'esbuild';
-import { readFile, writeFile, mkdir, copyFile } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, copyFile, rm, readdir } from 'node:fs/promises';
 
 const single = process.argv.includes('--single');
 const makeSite = process.argv.includes('--site');
 
-await build({
+const shared = {
   entryPoints: ['src/main.js'],
   bundle: true,
   format: 'iife',
-  outfile: 'app.js',
   minify: true,
   sourcemap: false,
   target: ['chrome100', 'safari15.4', 'firefox100'],
   legalComments: 'none',
-  loader: { '.jpg': 'dataurl', '.png': 'dataurl', '.webp': 'dataurl', '.woff2': 'dataurl' },
   logLevel: 'info'
+};
+
+// The dev / offline bundle: every texture, font and image is inlined as a data URL.
+await build({
+  ...shared,
+  outfile: 'app.js',
+  loader: { '.jpg': 'dataurl', '.png': 'dataurl', '.webp': 'dataurl', '.woff2': 'dataurl' }
 });
-console.log('app.js built');
+console.log('app.js built (inlined assets)');
 
 if (makeSite) {
+  // GitHub Pages bundle: assets stay as separate, cacheable files, so the
+  // initial script drops from ~5 MB to a few hundred KB and images download
+  // in parallel. Relative URLs keep it working under a /marwle/ sub-path.
+  await rm('site/assets', { recursive: true, force: true });
+  await build({
+    ...shared,
+    outfile: 'site/app.js',
+    publicPath: './',
+    assetNames: 'assets/[name]-[hash]',
+    loader: { '.jpg': 'file', '.png': 'file', '.webp': 'file', '.woff2': 'file' }
+  });
   await mkdir('site', { recursive: true });
-  for (const f of ['index.html','style.css','app.js']) await copyFile(f, 'site/' + f);
-  console.log('site/ ready for GitHub Pages');
+  for (const f of ['index.html', 'style.css']) await copyFile(f, 'site/' + f);
+  const assets = await readdir('site/assets').catch(() => []);
+  console.log('site/ ready for GitHub Pages (' + assets.length + ' external assets)');
 }
 
 if (single) {

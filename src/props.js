@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { MAT, TEX } from './materials.js';
 import {
-  rBox, mesh, plane, cyl, sphere, rng, rand, pick, TAU, tube, cylinderBetween,
-  makeInstanced, textTexture, canvasTexture, roundRect, glowTexture
+  rBox, mesh, plane, cyl, sphere, rng, rand, pick, TAU,
+  textTexture, canvasTexture,
+  torus
 } from './utils.js';
 
 const V = (x,y,z) => new THREE.Vector3(x,y,z);
@@ -32,15 +33,14 @@ export function createLamp(seed = 1, height = 7.0) {
   const r = rng(seed);
   add(g, cyl(.22, .30, .5, 16), MAT.darkMetal, [0,.25,0]);
   add(g, cyl(.09, .13, height, 14), MAT.darkMetal, [0, height*.5+.4, 0]);
-  for(let i=0;i<3;i++) add(g, new THREE.TorusGeometry(.16+i*.015,.022,6,24), MAT.gold, [0,.65+i*.9,0], {rot:[Math.PI/2,0,0]});
+  for(let i=0;i<3;i++) add(g, torus(.16+i*.015,.022,6,24), MAT.gold, [0,.65+i*.9,0], {rot:[Math.PI/2,0,0]});
   const armCurve = new THREE.CatmullRomCurve3([
     V(0, height*.9, 0), V(0, height*.98, .7), V(0, height+.15, 1.35), V(0, height+.05, 1.9)
   ]);
   add(g, new THREE.TubeGeometry(armCurve, 20, .055, 8), MAT.darkMetal, [0,0,0]);
   add(g, new THREE.CylinderGeometry(.06, .06, .3, 8), MAT.brass, [0, height+.0, 1.9]);
   add(g, new THREE.ConeGeometry(.35, .22, 16), MAT.gold, [0, height+.05, 1.9]);
-  const globe = add(g, sphere(.30, 16, 12), MAT.neon('#ffdf9e', 2.3), [0, height-.28, 1.9], {cast:false, receive:false});
-  globe.userData.noMerge = true;
+  add(g, sphere(.30, 16, 12), MAT.neon('#ffdf9e', 2.3), [0, height-.28, 1.9], {cast:false, receive:false});
   const halo = new THREE.Sprite(MAT.glowSprite('#ffca72', .24)); halo.position.set(0,height-.28,1.9); halo.scale.set(2.2,2.2,1); g.add(halo);
   // hanging flower basket
   const basket = add(g, new THREE.CylinderGeometry(.32,.24,.3,12), MAT.terracotta, [0, height*.78, .72]);
@@ -118,7 +118,7 @@ export function createShrubPlanter(seed = 1, size = 1.0) {
   const g = new THREE.Group();
   const r = rng(seed);
   add(g, new THREE.CylinderGeometry(.7*size,.85*size,.72*size,24), MAT.terracotta, [0,.36*size,0]);
-  add(g, new THREE.TorusGeometry(.74*size,.055*size,6,32), MAT.creamTrim, [0,.7*size,0], {rot:[Math.PI/2,0,0]});
+  add(g, torus(.74*size,.055*size,6,32), MAT.creamTrim, [0,.7*size,0], {rot:[Math.PI/2,0,0]});
   add(g, sphere(.72*size,16,12), MAT.soil, [0,.73*size,0]).scale.set(1,.25,1);
   const n=15+Math.floor(r()*10);
   for(let i=0;i<n;i++){
@@ -202,12 +202,14 @@ export function createPerson(seed = 1, colors = null) {
     const armGroup = new THREE.Group(); armGroup.position.set(s*.31,.58,0); hips.add(armGroup);
     add(armGroup, new THREE.CapsuleGeometry(.075,.48,3,8), skin, [0,-.27,0]).rotation.z = s*.12;
     armGroup.userData.base = 0;
+    armGroup.userData.noMerge = true; // animated separately by animatePerson
     g.userData['arm'+s] = armGroup;
   }
   for(const s of [-1,1]){
     const leg = new THREE.Group(); leg.position.set(s*.13,.02,0); hips.add(leg);
     add(leg, new THREE.CapsuleGeometry(.1,.58,3,8), pants, [0,-.34,0]);
     add(leg, rBox(.18,.12,.34,.04), shoes, [0,-.69,.1]);
+    leg.userData.noMerge = true; // animated separately by animatePerson
     g.userData['leg'+s] = leg;
   }
   // add accessories
@@ -258,14 +260,14 @@ export function createFountain() {
   const stone = new THREE.MeshPhysicalMaterial({ color:'#f0d7bd', roughness:.34, clearcoat:.45, clearcoatRoughness:.25, envMapIntensity:1.3 });
   // wide basin and stepped centrepiece
   add(g, cyl(4.6, 4.9, .42, 96), stone, [0,.22,0]);
-  add(g, new THREE.TorusGeometry(4.65,.16,10,96), MAT.gold, [0,.45,0], {rot:[Math.PI/2,0,0]});
+  add(g, torus(4.65,.16,10,96), MAT.gold, [0,.45,0], {rot:[Math.PI/2,0,0]});
   add(g, cyl(3.8,4.5,1.1,64), stone, [0,.85,0]);
   add(g, cyl(2.0,2.8,.9,48), stone, [0,1.85,0]);
-  add(g, new THREE.TorusGeometry(3.55,.1,8,64), MAT.gold, [0,1.42,0], {rot:[Math.PI/2,0,0]});
+  add(g, torus(3.55,.1,8,64), MAT.gold, [0,1.42,0], {rot:[Math.PI/2,0,0]});
   // central sun sculpture
   add(g, cyl(.55,.9,2.6,20), MAT.gold, [0,3.4,0]);
   const sun = add(g, sphere(1.25, 32, 24), MAT.paint_glossRed, [0,5.15,0]); sun.scale.set(1,.9,.5);
-  add(g, new THREE.TorusGeometry(1.36,.13,10,48), MAT.gold, [0,5.15,0]);
+  add(g, torus(1.36,.13,10,48), MAT.gold, [0,5.15,0]);
   for(let i=0;i<12;i++){
     const a=i/12*TAU;
     const ray=add(g, rBox(.14,.75,.12,.03), i%2?MAT.gold:MAT.paint_butter, [Math.cos(a)*1.75,5.15+Math.sin(a)*1.75,.0]);
@@ -354,7 +356,7 @@ export function createDrone(seed=1) {
   add(g, sphere(.3,16,12), MAT.glassBlue, [0,.12,.1]).scale.set(1,.7,1.3);
   for(const s of [-1,1]) for(const z of [-.42,.42]) {
     add(g, cyl(.035,.035,.32,6), MAT.darkMetal, [s*.44,.05,z]);
-    const rotor=add(g, new THREE.TorusGeometry(.26,.03,6,20), MAT.darkMetal, [s*.44,.23,z], {rot:[Math.PI/2,0,0]});
+    const rotor=add(g, torus(.26,.03,6,20), MAT.darkMetal, [s*.44,.23,z], {rot:[Math.PI/2,0,0]});
   }
   add(g, rBox(.38,.3,.38,.05), MAT.woodLight, [0,-.32,.1]);
   add(g, sphere(.08,8,6), MAT.neon('#58f6ff',2.6), [0,-.1,.5],{cast:false}).userData.noMerge=true;
@@ -373,52 +375,11 @@ export function createPetalField(count=180, extent=[-40,40,-110,25], seed=5) {
   const geom=new THREE.BufferGeometry(); geom.setAttribute('position',new THREE.BufferAttribute(pos,3)); geom.setAttribute('color',new THREE.BufferAttribute(col,3));
   const mat=new THREE.PointsMaterial({map:TEX.glow,size:.16,transparent:true,opacity:.34,vertexColors:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
   const pts=new THREE.Points(geom,mat); pts.frustumCulled=false;
-  function update(t){const a=geom.attributes.position.array; for(let i=0;i<count;i++){a[i*3+1]+=Math.sin(t*.3+phase[i])*.0008; a[i*3]+=Math.cos(t*.22+phase[i])*.0005; if(a[i*3+1]>23)a[i*3+1]=1;} geom.attributes.position.needsUpdate=true;}
+  const base=pos.slice(); // absolute drift, not per-frame accumulation (stable when frozen)
+  function update(t){const a=geom.attributes.position.array; for(let i=0;i<count;i++){a[i*3]=base[i*3]+Math.cos(t*.22+phase[i])*.4; a[i*3+1]=base[i*3+1]+Math.sin(t*.3+phase[i])*.45;} geom.attributes.position.needsUpdate=true;}
   return {points:pts,update};
 }
 
-export function createTram() {
-  const g = new THREE.Group();
-  const a = new THREE.Vector3(-62, 30, -88);
-  const b = new THREE.Vector3(62, 30, -88);
-  const mid = new THREE.Vector3(0, 27.5, -88);
-  const curve = new THREE.CatmullRomCurve3([a, mid, b]);
-  const cableGeo = new THREE.TubeGeometry(curve, 80, .055, 6, false);
-  const cable = new THREE.Mesh(cableGeo, MAT.darkMetal); g.add(cable);
-  const cable2 = cable.clone(); cable2.position.y = -4.2; g.add(cable2);
-  // slender pylons
-  for (const x of [-52, 52]) {
-    add(g, rBox(1.2, 32, 1.2, .18, 2), MAT.paint_cream, [x, 16, -88]);
-    add(g, rBox(2.8, .3, 2.8, .08, 2), MAT.paint_coral, [x, 31.8, -88]);
-    for (let i=0;i<3;i++) add(g, new THREE.TorusGeometry(.75,.06,6,24), MAT.gold, [x, 4+i*9, -88], {rot:[Math.PI/2,0,0]});
-  }
-  const cars = [];
-  for (let i=0;i<2;i++){
-    const car = new THREE.Group();
-    add(car, rBox(6.6, 3.0, 3.0, .75, 4), i?MAT.paint_glossRed:MAT.paint_cream, [0,0,0]);
-    add(car, rBox(6.0, 1.5, 2.55, .3, 3), MAT.glassDark, [0,.3,1.55], {cast:false});
-    // window mullions
-    for (let j=-2;j<=2;j++) add(car, rBox(.08,1.4,.08,.01), MAT.gold, [j*1.2,.3,2.82], {cast:false});
-    add(car, rBox(7.2,.18,3.2,.08), MAT.paint_butter, [0,1.62,0]);
-    add(car, rBox(6.8,.1,2.8,.05), MAT.gold, [0,-1.6,0]);
-    // suspension arm to cable
-    add(car, rBox(.12,4.0,.12,.02), MAT.darkMetal, [0,3.2,0]);
-    add(car, rBox(1.2,.2,.2,.03), MAT.darkMetal, [0,5.1,0]);
-    add(car, sphere(.16,12,8), MAT.neon('#ffe6a4',2.7), [0,-1.45,1.55], {cast:false,receive:false}).userData.noMerge=true;
-    for (let j=0;j<6;j++) add(car, sphere(.07,8,6), MAT.neon('#ffd992',1.8), [-2.8+j*1.12,-1.35,1.56], {cast:false,receive:false}).userData.noMerge=true;
-    car.userData.phase = i*.5;
-    cars.push(car); g.add(car);
-  }
-  function update(t) {
-    cars.forEach((car,i)=>{
-      const u = ((t*.008 + car.userData.phase) % 1);
-      const p = curve.getPointAt(u);
-      car.position.set(p.x, p.y-2.3, p.z);
-      car.rotation.z = Math.sin(t*.3+i)*.015;
-    });
-  }
-  return { group:g, update };
-}
 
 export function createCandyCart() {
   const g = new THREE.Group();
@@ -451,7 +412,7 @@ export function createCandyCart() {
   for(let i=0;i<3;i++){
     add(g, new THREE.CylinderGeometry(.025,.025,1.5,6), MAT.whiteTrim, [1.28,2.1+i*.12,-.35+i*.3]);
     const pop=add(g,sphere(.22,12,8), [MAT.paint_rose,MAT.paint_butter,MAT.paint_mint][i], [1.28,2.88+i*.12,-.35+i*.3]);
-    for(let k=0;k<2;k++) add(g,new THREE.TorusGeometry(.20-k*.06,.02,5,16),MAT.whiteTrim,[1.28,2.88+i*.12,-.35+i*.3],{rot:[0,Math.PI/2,0]});
+    for(let k=0;k<2;k++) add(g,torus(.20-k*.06,.02,5,16),MAT.whiteTrim,[1.28,2.88+i*.12,-.35+i*.3],{rot:[0,Math.PI/2,0]});
   }
   // tiny sign
   add(g, rBox(1.55,.62,.08,.06,2), MAT.paint_cream, [0,2.55,.74]);
@@ -462,7 +423,7 @@ export function createCandyCart() {
   for(let i=0;i<6;i++){
     const bx=-1.3+i*.52, by=4.25+Math.sin(i*1.2)*.45, bz=(i%2?.2:-.2);
     const b=add(g,sphere(.34,16,12), new THREE.MeshPhysicalMaterial({color:bcols[i],roughness:.26,clearcoat:.8,clearcoatRoughness:.18,envMapIntensity:1.5}),[bx,by,bz],{cast:false});
-    b.scale.set(1,1.15,1); balloons.push(b);
+    b.scale.set(1,1.15,1); b.userData.baseY = by; b.userData.noMerge = true; balloons.push(b);
     add(g, new THREE.CylinderGeometry(.006,.006,2.6,4), MAT.whiteTrim, [bx,by-1.5,bz],{cast:false});
   }
   // a shop cat asleep on the warm counter
@@ -472,7 +433,7 @@ export function createCandyCart() {
   add(cat, sphere(.34,16,12), catFur, [0,-.12,0]); cat.children[0].scale.set(1.25,.52,.75);
   add(cat, sphere(.21,16,12), catCream, [.18,-.05,.18]);
   for(const s of [-1,1]) { const ear=add(cat,new THREE.ConeGeometry(.08,.18,3),catFur,[.18+s*.11,.13,.18]); ear.rotation.z=s*.22; }
-  add(cat, new THREE.TorusGeometry(.28,.035,6,20,Math.PI), catFur, [-.32,-.08,0], {rot:[0,Math.PI/2,0]});
+  add(cat, torus(.28,.035,6,20,Math.PI), catFur, [-.32,-.08,0], {rot:[0,Math.PI/2,0]});
   for(const s of [-1,1]) add(cat,sphere(.025,6,4),MAT.charcoal,[.20+s*.06,.02,.33],{cast:false});
   cat.position.set(.95,1.67,.05); cat.rotation.y=-.35; g.add(cat);
   const sh=contactShadow(4.5,3.2,.36); sh.position.y=.02; g.add(sh);

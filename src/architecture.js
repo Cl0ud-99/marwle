@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { MAT, TEX } from './materials.js';
 import {
-  rBox, mesh, plane, cyl, sphere, rng, rand, pick, TAU, tube, cylinderBetween,
-  makeInstanced, textTexture
+  rBox, mesh, plane, cyl, sphere, rng, pick, TAU, tube, cylinderBetween,
+  makeInstanced, textTexture,
+  torus
 } from './utils.js';
 
 // ─────────────────────────────────────────────────────────────
@@ -51,12 +52,34 @@ export function windowUnit(w, h, opts = {}) {
   const g = new THREE.Group();
   const frame = opts.frameMat ?? MAT.whiteTrim;
   const glass = opts.glass ?? MAT.glassDark;
-  add(g, rBox(w + .18, h + .18, .13, .035, 2), frame, [0, 0, 0]);
-  add(g, rBox(w, h, .075, .02, 2), glass, [0, 0, .085]);
   const mullion = opts.mullion ?? frame;
-  add(g, rBox(.045, h * .92, .04, .01), mullion, [0, 0, .14]);
-  add(g, rBox(w * .92, .045, .04, .01), mullion, [0, h*.12, .14]);
-  add(g, rBox(w + .31, .10, .21, .025), frame, [0, -h*.53, .06]);
+
+  if (opts.style !== 'hero') {
+    // cheap unit for the background rows: still real geometry, but flat
+    add(g, rBox(w + .18, h + .18, .13, .035, 2), frame, [0, 0, 0]);
+    add(g, rBox(w, h, .075, .02, 2), glass, [0, 0, .085]);
+    add(g, rBox(.045, h * .92, .04, .01), mullion, [0, 0, .14]);
+    add(g, rBox(w * .92, .045, .04, .01), mullion, [0, h*.12, .14]);
+    add(g, rBox(w + .31, .10, .21, .025), frame, [0, -h*.53, .06]);
+    return g;
+  }
+
+  // hero unit: a projecting surround with real jambs, so the sun can drop a
+  // shadow into the reveal and the glass sits visibly behind the moulding
+  const depth = .26;
+  const front = depth * .5;
+  add(g, rBox(w + .34, h + .38, depth, .05, 3), frame, [0, 0, 0]);
+  add(g, rBox(w, h, .06, .02, 2), glass, [0, 0, front - .12]);
+  const j = .06;
+  add(g, rBox(j, h - .02, .24, .015, 2), frame, [-(w*.5 - j*.5), 0, front - .13]);
+  add(g, rBox(j, h - .02, .24, .015, 2), frame, [ (w*.5 - j*.5), 0, front - .13]);
+  add(g, rBox(w - .02, j, .24, .015, 2), frame, [0,  (h*.5 - j*.5), front - .13]);
+  add(g, rBox(w - .02, j, .24, .015, 2), frame, [0, -(h*.5 - j*.5), front - .13]);
+  add(g, rBox(.05, h * .9, .05, .01), mullion, [0, 0, front - .085]);
+  add(g, rBox(w * .9, .05, .05, .01), mullion, [0, h*.12, front - .085]);
+  // sill + drip course
+  add(g, rBox(w + .44, .11, .32, .03, 2), frame, [0, -h*.55, .10]);
+  add(g, rBox(w + .52, .055, .38, .02, 2), MAT.creamTrim, [0, -h*.63, .13]);
   return g;
 }
 
@@ -193,8 +216,48 @@ function roofPlanters(g, width, depth, y, seed) {
 }
 
 function addCornice(g, width, depth, y, mat, thickness=.35, out=.4) {
-  add(g, rBox(width + out, thickness, depth + out, .09, 2), mat, [0, y, 0]);
-  add(g, rBox(width + out*.55, thickness*.42, depth + out*.55, .06), mat, [0, y + thickness*.7, 0]);
+  // four stepped slabs read as a real moulding profile (bed → fascia → cove → crown)
+  const w = width + out, d = depth + out;
+  add(g, rBox(w*.985, thickness*.50, d*.985, .03, 2), mat, [0, y - thickness*.28, 0]);
+  add(g, rBox(w, thickness, d, .05, 2), mat, [0, y, 0]);
+  add(g, rBox(w*.975, thickness*.45, d*.975, .04, 2), mat, [0, y + thickness*.62, 0]);
+  add(g, rBox(w*1.012, thickness*.20, d*1.012, .025, 2), mat, [0, y + thickness*.90, 0]);
+}
+
+// Roof clutter: nothing adds silhouette detail faster than a few boxes, a
+// water tank and an antenna on top of an otherwise plain parapet.
+function roofClutter(g, width, depth, y, seed) {
+  const r = rng(seed);
+  const steel = MAT.darkMetal, silver = MAT.silver, cream = MAT.creamTrim;
+  const n = 2 + Math.floor(r() * 2.4);
+  for (let i = 0; i < n; i++) {
+    const x = (r() - .5) * width * .62, z = (r() - .5) * depth * .55;
+    if (r() > .45) {
+      const w = 1.0 + r() * .7, h = .5 + r() * .22, d = .8 + r() * .45;
+      add(g, rBox(w, h, d, .055, 2), silver, [x, y + h * .5, z]);
+      add(g, cyl(.25, .25, .07, 18), steel, [x, y + h + .03, z]);
+      add(g, rBox(w * .8, .05, .08, .01), steel, [x, y + h * .45, z + d * .52]);
+    } else {
+      const h = .5 + r() * .8;
+      add(g, cyl(.11, .13, h, 10), steel, [x, y + h * .5, z]);
+      add(g, sphere(.15, 10, 8), steel, [x, y + h, z]);
+    }
+  }
+  if (r() > .55) {
+    const x = (r() - .5) * width * .4, z = (r() - .5) * depth * .4;
+    const rad = .65 + r() * .35, h = 1.3 + r() * .6;
+    add(g, cyl(rad, rad, h, 18), cream, [x, y + .55 + h * .5, z]);
+    add(g, sphere(rad * .55, 14, 10), cream, [x, y + .55 + h, z]).scale.set(1, .5, 1);
+    for (let k = 0; k < 3; k++) {
+      const a = k / 3 * TAU;
+      add(g, cyl(.05, .05, .9, 6), steel, [x + Math.cos(a) * rad * .72, y + .45, z + Math.sin(a) * rad * .72]);
+    }
+  }
+  if (r() > .35) {
+    const x = (r() - .5) * width * .5, z = (r() - .5) * depth * .45, h = 2.1 + r() * 1.8;
+    add(g, cyl(.035, .05, h, 6), steel, [x, y + h * .5, z]);
+    for (let k = 1; k < 4; k++) add(g, rBox(.72 - k * .13, .03, .03, .005), steel, [x, y + h * (.45 + k * .14), z]);
+  }
 }
 
 export function facadeWindows(g, opts) {
@@ -211,7 +274,7 @@ export function facadeWindows(g, opts) {
       const y = y0 + gapY + wh/2 + row*(wh+gapY);
       const lit = litPattern ? litPattern(row, col) : ((row*3+col*5)%7===0);
       const glassMat = lit ? (col%2 ? MAT.glassWarm : MAT.shopWindowsCool) : glass;
-      const w = windowUnit(ww, wh, { glass: glassMat, frameMat: frame });
+      const w = windowUnit(ww, wh, { glass: glassMat, frameMat: frame, style: opts.style });
       w.position.set(x, y, z);
       g.add(w);
       if (flowerRows.includes(row)) {
@@ -238,11 +301,11 @@ function cornerTurret(g, x, z, radius, height, opts = {}) {
   const y0 = opts.y0 ?? 0;
   add(g, cyl(radius, radius*1.03, height, 40), opts.mat ?? MAT.paint_cream, [x, y0+height/2, z]);
   for (let i=0; i<3; i++) {
-    add(g, new THREE.TorusGeometry(radius*1.02, .055, 8, 48), MAT.gold, [x, y0 + height*(.25+i*.22), z], { rot:[Math.PI/2,0,0] });
+    add(g, torus(radius*1.02, .055, 8, 48), MAT.gold, [x, y0 + height*(.25+i*.22), z], { rot:[Math.PI/2,0,0] });
   }
   const dome = add(g, new THREE.SphereGeometry(radius*1.12, 40, 24, 0, TAU, 0, Math.PI/2), opts.domeMat ?? MAT.paint_rose, [x, y0+height, z]);
   dome.scale.set(1,.62,1);
-  add(g, new THREE.TorusGeometry(radius*1.12, .07, 8, 48), MAT.gold, [x, y0+height, z], {rot:[Math.PI/2,0,0]});
+  add(g, torus(radius*1.12, .07, 8, 48), MAT.gold, [x, y0+height, z], {rot:[Math.PI/2,0,0]});
   add(g, new THREE.CylinderGeometry(.04,.07,1.8,8), MAT.gold, [x, y0+height+radius*.58, z]);
   add(g, new THREE.SphereGeometry(.18, 12, 8), MAT.neon('#ffe38e', 3), [x, y0+height+radius*.58+1.0, z]).userData.noMerge = true;
   const win = archWindow(radius*1.1, height*.36, { glass: MAT.glassWarm, frameMat: MAT.whiteTrim });
@@ -265,7 +328,7 @@ export function createFizzDome() {
   for (let i=0;i<4;i++){
     const ry = 14.0 + i*1.0;
     const rr = 6.75 * Math.sqrt(Math.max(0,1 - Math.pow((ry-13.9)/5.1, 2))) * 1.18;
-    add(g, new THREE.TorusGeometry(rr, .075, 8, 64), MAT.gold, [0, ry, 0], { rot:[Math.PI/2,0,0] });
+    add(g, torus(rr, .075, 8, 64), MAT.gold, [0, ry, 0], { rot:[Math.PI/2,0,0] });
   }
   add(g, new THREE.CylinderGeometry(.1,.15,3.6,10), MAT.gold, [0, 20.0, 0]);
   add(g, new THREE.SphereGeometry(.34, 16, 12), MAT.neon('#ffe387', 4), [0, 21.9, 0]).userData.noMerge = true;
@@ -283,19 +346,19 @@ export function createFizzDome() {
   add(g, plane(10.2, 3.35), MAT.shopWindows, [0, 2.45, 5.68], {receive:false});
   for (let i=-3;i<=3;i++) add(g, rBox(.10, 3.75, .2, .025), MAT.creamTrim, [i*1.55, 2.45, 5.76]);
   const door = add(g, rBox(1.8, 3.5, .22, .06), MAT.paint_glossTeal, [3.6, 1.95, 5.72]);
-  add(g, new THREE.TorusGeometry(.46, .035, 8, 20), MAT.gold, [3.6, 2.0, 5.86]);
+  add(g, torus(.46, .035, 8, 20), MAT.gold, [3.6, 2.0, 5.86]);
   const awn = awning(11.5, 3.0, { mat: MAT.awningPink }); awn.position.set(0, 4.8, 6.55); g.add(awn);
   for(let i=-2;i<=2;i++){
     const bulb = add(g, sphere(.065,8,6), MAT.neon('#ffd56e',3.4), [i*2.1, 4.62, 8.02], {cast:false, receive:false});
     bulb.userData.noMerge = true;
   }
   // windows and balconies
-  facadeWindows(g, { width: 11.0, height: 4.6, y0: 6.0, z: 5.56, cols: 5, rows: 2, ww: 1.42, wh: 1.75, flowerRows:[1], balconyRows:[1], glass: MAT.glassBlue });
+  facadeWindows(g, { width: 11.0, height: 4.6, y0: 6.0, z: 5.56, cols: 5, rows: 2, ww: 1.42, wh: 1.75, flowerRows:[1], balconyRows:[1], glass: MAT.glassBlue, style: 'hero' });
   // narrow side windows
   for (const side of [-1,1]) {
-    const w = windowUnit(1.3, 1.8, { glass: side<0?MAT.glassWarm:MAT.glassDark });
+    const w = windowUnit(1.3, 1.8, { glass: side<0?MAT.glassWarm:MAT.glassDark, style: 'hero' });
     w.rotation.y = side*Math.PI/2; w.position.set(side*6.55, 8.0, 1.8); g.add(w);
-    const w2 = windowUnit(1.3, 1.8, { glass: MAT.glassBlue });
+    const w2 = windowUnit(1.3, 1.8, { glass: MAT.glassBlue, style: 'hero' });
     w2.rotation.y = side*Math.PI/2; w2.position.set(side*6.55, 8.0, -1.3); g.add(w2);
   }
   // roof terrace rail and greenery
@@ -317,7 +380,7 @@ export function createFizzDome() {
     const ry = sx < 0 ? -Math.PI/2 : Math.PI/2;
     for (let f=0; f<3; f++) {
       for (let c=0; c<3; c++) {
-        const w = windowUnit(1.24, 1.5, { glass: (f+c)%2 ? MAT.glassWarm : MAT.glassBlue, frameMat: MAT.creamTrim });
+        const w = windowUnit(1.24, 1.5, { glass: (f+c)%2 ? MAT.glassWarm : MAT.glassBlue, frameMat: MAT.creamTrim, style: 'hero' });
         w.rotation.y = ry; w.position.set(x, 6.8+f*1.95, -2.8+c*2.75); g.add(w);
       }
     }
@@ -327,9 +390,9 @@ export function createFizzDome() {
       side.rotation.y = -Math.PI/2; side.position.set(x-.08, 9.4, -3.2); g.add(side);
       const med = new THREE.Group();
       add(med, new THREE.CircleGeometry(1.45,48), MAT.sign(TEX.screenFace,1), [0,0,.03]);
-      add(med, new THREE.TorusGeometry(1.52,.1,10,48), MAT.gold, [0,0,0]);
+      add(med, torus(1.52,.1,10,48), MAT.gold, [0,0,0]);
       med.rotation.y = -Math.PI/2; med.position.set(x-.1, 8.2, 2.6); g.add(med);
-      const post = billboard(TEX.poster3, 3.2, 4.1, { depth:.18, backingMat: MAT.paint_cream, border:true, borderMat:MAT.coral??MAT.paint_coral, borderWidth:.09, bulbs:false, intensity:1.0 });
+      const post = billboard(TEX.poster3, 3.2, 4.1, { depth:.18, backingMat: MAT.paint_cream, border:true, borderMat:MAT.paint_coral, borderWidth:.09, bulbs:false, intensity:1.0 });
       post.rotation.y = -Math.PI/2; post.position.set(x-.08, 7.0, -2.0); g.add(post);
     }
   }
@@ -347,14 +410,14 @@ export function createDreamTower() {
   add(g, rBox(12.8, 1.1, 11.8, .2, 2), MAT.paint_teal, [0, 7.0, 0]);
   // middle drum
   add(g, cyl(6.7, 7.2, 8.6, 64), MAT.paint_teal, [0, 11.1, 0]);
-  for (let i=0;i<4;i++) add(g, new THREE.TorusGeometry(6.9, .09, 8, 64), MAT.gold, [0, 7.7+i*1.9, 0], {rot:[Math.PI/2,0,0]});
+  for (let i=0;i<4;i++) add(g, torus(6.9, .09, 8, 64), MAT.gold, [0, 7.7+i*1.9, 0], {rot:[Math.PI/2,0,0]});
   // upper drum
   add(g, cyl(4.8, 5.7, 6.8, 56), MAT.paint_coral, [0, 19.1, 0]);
-  for (let i=0;i<3;i++) add(g, new THREE.TorusGeometry(5.15, .08, 8, 56), MAT.gold, [0, 16.5+i*1.8, 0], {rot:[Math.PI/2,0,0]});
+  for (let i=0;i<3;i++) add(g, torus(5.15, .08, 8, 56), MAT.gold, [0, 16.5+i*1.8, 0], {rot:[Math.PI/2,0,0]});
   // crown dome and spike
   const crown = add(g, new THREE.SphereGeometry(5.1, 56, 28, 0, TAU, 0, Math.PI/2), MAT.paint_butter, [0, 22.4, 0]);
   crown.scale.set(1.08, .65, 1.08);
-  add(g, new THREE.TorusGeometry(5.15, .1, 8, 56), MAT.gold, [0, 22.5, 0], {rot:[Math.PI/2,0,0]});
+  add(g, torus(5.15, .1, 8, 56), MAT.gold, [0, 22.5, 0], {rot:[Math.PI/2,0,0]});
   for(let i=0;i<6;i++){
     const a=i/6*TAU;
     add(g, new THREE.CylinderGeometry(.045,.045,1.6,6), MAT.brass, [Math.cos(a)*3.9, 25.0, Math.sin(a)*3.9]);
@@ -364,7 +427,7 @@ export function createDreamTower() {
   star.scale.set(.65,1.5,.65); star.userData.noMerge=true;
   // circular feature window on front
   const port = new THREE.Group();
-  add(port, new THREE.TorusGeometry(3.15, .18, 14, 64), MAT.gold, [0,0,0]);
+  add(port, torus(3.15, .18, 14, 64), MAT.gold, [0,0,0]);
   add(port, new THREE.CircleGeometry(3.0, 64), MAT.sign(TEX.screenFace, 1.0), [0,0,.03]);
   for(let i=0;i<8;i++){
     const a=i/8*TAU;
@@ -386,7 +449,7 @@ export function createDreamTower() {
   // side exterior glass elevator
   const elev = new THREE.Group();
   add(elev, cyl(.9,.9,15.5,24,true), MAT.glassClear, [0, 7.75, 0], {cast:false});
-  for(let i=0;i<7;i++) add(elev, new THREE.TorusGeometry(.93,.035,6,24), MAT.gold, [0, 1.0+i*2.3, 0], {rot:[Math.PI/2,0,0]});
+  for(let i=0;i<7;i++) add(elev, torus(.93,.035,6,24), MAT.gold, [0, 1.0+i*2.3, 0], {rot:[Math.PI/2,0,0]});
   add(elev, rBox(1.5,.18,.9,.04), MAT.gold, [0, 10.5, 0]);
   elev.position.set(-7.15, 0, 2.0); g.add(elev);
   // cables / flagpole
@@ -437,7 +500,7 @@ export function createMarwleHall() {
   // entrance canopy / doorway
   add(g, rBox(4.5, 4.8, .2, .1), MAT.paint_glossBlue, [5.0, 2.4, 6.82]);
   add(g, rBox(3.8, 4.25, .16, .08), MAT.glassWarm, [5.0, 2.25, 6.94]);
-  add(g, new THREE.TorusGeometry(1.9,.06,8,40), MAT.gold, [5.0, 2.25, 7.05]);
+  add(g, torus(1.9,.06,8,40), MAT.gold, [5.0, 2.25, 7.05]);
   // rounded corner tower
   cornerTurret(g, 9.2, 5.2, 2.0, 14.8, { y0: 0, mat: MAT.paint_cream, domeMat: MAT.paint_coral });
   // ── side elevation facing the approach: the camera sees this constantly ──
@@ -450,7 +513,7 @@ export function createMarwleHall() {
         const wz = -4.6 + c*2.3;
         const wy = 5.6 + f*2.1;
         if (f===0 && c>1) continue;
-        const w = windowUnit(1.35, 1.28, { glass: (f+c)%3===0 ? MAT.glassWarm : MAT.glassDark, frameMat: MAT.creamTrim });
+        const w = windowUnit(1.35, 1.28, { glass: (f+c)%3===0 ? MAT.glassWarm : MAT.glassDark, frameMat: MAT.creamTrim, style: 'hero' });
         w.rotation.y = rotY; w.position.set(x, wy, wz); g.add(w);
       }
     }
@@ -464,7 +527,7 @@ export function createMarwleHall() {
       g.add(mural);
       const medallion = new THREE.Group();
       add(medallion, new THREE.CircleGeometry(1.55, 48), MAT.sign(TEX.screenFace, 1.0), [0,0,.03]);
-      add(medallion, new THREE.TorusGeometry(1.62,.12,10,48), MAT.gold, [0,0,0]);
+      add(medallion, torus(1.62,.12,10,48), MAT.gold, [0,0,0]);
       medallion.rotation.y = -Math.PI/2;
       medallion.position.set(x-.1, 8.4, 2.0);
       g.add(medallion);
@@ -542,7 +605,7 @@ export function createGenericBuilding(opts) {
     add(g, rBox(width*.9, .075, .20, .015), trim, [0, y, depth*.5+.06]);
   }
   const crest = new THREE.Group();
-  add(crest, new THREE.TorusGeometry(1.15,.075,8,40), MAT.gold, [0,0,.02]);
+  add(crest, torus(1.15,.075,8,40), MAT.gold, [0,0,.02]);
   add(crest, new THREE.CircleGeometry(1.08,40), MAT.sign(TEX.screenFace, .65), [0,0,.035]);
   add(crest, new THREE.OctahedronGeometry(.35,0), MAT.gold, [0,0,.06]).rotation.z = Math.PI/4;
   crest.position.set(0, height-1.7, depth*.5+.16); g.add(crest);
@@ -566,9 +629,10 @@ export function createGenericBuilding(opts) {
   // roof silhouette
   add(g, rBox(width*.88, .6, depth*.88, .12, 2), trim, [0, height+.25, 0]);
   roofPlanters(g, width*.82, depth, height+.25, seed+55);
+  roofClutter(g, width*.8, depth*.8, height+.58, seed+91);
   if (cornerTower) cornerTurret(g, width*.5-1.0, depth*.42, Math.min(2.4,width*.2), height*.86, { y0: height*.28, mat: accent, domeMat: trim });
   if (roof === 'donut') {
-    const donut = add(g, new THREE.TorusGeometry(2.0, .78, 18, 48), MAT.paint_rose, [0, height+3.0, 0], { rot:[Math.PI/2,0,0] });
+    const donut = add(g, torus(2.0, .78, 18, 48), MAT.paint_rose, [0, height+3.0, 0], { rot:[Math.PI/2,0,0] });
     donut.scale.set(1,.55,1); // stand upright torus
     donut.rotation.set(0,0,0); donut.scale.set(1,1,1);
     for(let i=0;i<8;i++){ const a=i/8*TAU; add(g, sphere(.11,8,6), MAT.neon(['#ffe8a2','#ff8fb4','#92e5e0'][i%3],2.6), [Math.cos(a)*2.2, height+3.0+Math.sin(a)*2.2, .85],{cast:false,receive:false}).userData.noMerge=true; }
@@ -584,53 +648,13 @@ export function createGenericBuilding(opts) {
     add(g, new THREE.ConeGeometry(.9, 1.2, 12, 1, true), MAT.paint_glossRed, [0, height+.55, 0]).rotation.x = Math.PI;
     for(let i=0;i<3;i++){ const a=i/3*TAU; const fin=add(g, rBox(.12,1.2,.8,.03), MAT.paint_glossRed, [Math.cos(a)*.8,height+1.3,Math.sin(a)*.8]); fin.rotation.y=-a; }
   } else if (roof === 'ring') {
-    add(g, new THREE.TorusGeometry(2.6, .16, 10, 80), MAT.gold, [0, height+2.8, 0], { rot:[Math.PI/2,0,0] });
-    add(g, new THREE.TorusGeometry(2.1, .12, 10, 80), MAT.paint_aqua, [0, height+2.8, 0], { rot:[Math.PI/2+0.12,0,0] });
+    add(g, torus(2.6, .16, 10, 80), MAT.gold, [0, height+2.8, 0], { rot:[Math.PI/2,0,0] });
+    add(g, torus(2.1, .12, 10, 80), MAT.paint_aqua, [0, height+2.8, 0], { rot:[Math.PI/2+0.12,0,0] });
   }
   return g;
 }
 
-export function createGateBridge() {
-  const g = new THREE.Group();
-  // airy pedestrian bridge linking the two sides, with a clocktower eye
-  add(g, rBox(30, .55, 2.4, .2, 3), MAT.paint_cream, [0, 8.6, 0]);
-  add(g, rBox(30, 1.1, .35, .15, 2), MAT.paint_coral, [0, 9.25, 1.05]);
-  for(let i=-13;i<=13;i++) add(g, rBox(.12, .9, .12, .02), MAT.gold, [i*1.1, 9.2, 1.15]);
-  // bridge supports
-  for (const x of [-13.5, 13.5]) {
-    add(g, cyl(.42, .55, 8.5, 16), MAT.paint_cream, [x, 4.3, 0]);
-    add(g, new THREE.TorusGeometry(.65,.07,8,32), MAT.gold, [x, 1.6, 0], {rot:[Math.PI/2,0,0]});
-  }
-  // central clock/portal
-  add(g, new THREE.TorusGeometry(2.25, .35, 12, 64), MAT.paint_glossRed, [0, 11.4, 0]);
-  add(g, new THREE.CircleGeometry(2.0, 64), MAT.sign(TEX.screenFace, .8), [0, 11.4, .02]);
-  add(g, new THREE.CylinderGeometry(.16,.16,.6,12), MAT.gold, [0, 11.4, .6], { rot:[Math.PI/2,0,0] });
-  for(let i=0;i<12;i++){ const a=i/12*TAU; const b=add(g,sphere(.075,8,6),MAT.neon('#ffe7a0',2.8),[Math.cos(a)*2.72,11.4+Math.sin(a)*2.72,.25],{cast:false,receive:false});b.userData.noMerge=true; }
-  // greenery draped over rail
-  for(let i=-6;i<=6;i+=2){ const p=new THREE.Group(); add(p,sphere(.45,8,6),MAT.leafMid,[0,0,0]); p.position.set(i*2.1,9.4,.5); g.add(p); }
-  return g;
-}
 
-export function createSkylineTower(seed, x, z, h, w) {
-  const r = rng(seed);
-  const g = new THREE.Group();
-  const base = new THREE.Color().setHSL(.52 + r()*.08, .28 + r()*.2, .45 + r()*.18);
-  const mat = new THREE.MeshStandardMaterial({ color: base, roughness: .32, metalness: .4, envMapIntensity: .9, transparent: true, opacity: .9 });
-  const body = add(g, rBox(w, h, w*.8, .7, 2), mat, [0, h/2, 0], {cast:false});
-  // vertical light strips create the city-from-afar texture
-  const stripMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#c6eeff'), transparent: true, opacity: .25 + r()*.25, toneMapped: false });
-  for (let i=0;i<4;i++){
-    const sw = w*.035;
-    add(g, rBox(sw, h*.72, .08, .01), stripMat, [-w*.3+i*w*.2, h*.52, w*.4+.06], {cast:false, receive:false});
-  }
-  // crown variants
-  const v = r();
-  if (v<.35) add(g, new THREE.CylinderGeometry(w*.06, w*.14, h*.22, 8), mat, [0, h*1.06, 0], {cast:false});
-  else if (v<.6) { const s=add(g,sphere(w*.55,16,12),mat,[0,h+.3,0],{cast:false}); s.scale.set(1,.35,1); }
-  else add(g, rBox(w*.72,h*.08,w*.7,.1), mat, [0,h+.4,0], {cast:false});
-  g.position.set(x, 0, z);
-  return g;
-}
 
 function texMarwleSide() {
   return textTexture({
@@ -654,25 +678,25 @@ export function createSunPalace() {
   add(g, rBox(15.5, 8.5, 12.0, 3.0, 4), MAT.paint_teal, [0,22.5,0]);
   add(g, rBox(14.4, .6, 11.2, .16, 2), MAT.gold, [0,27.0,0]);
   add(g, cyl(5.2, 6.6, 8.5, 48), MAT.paint_butter, [0,31.2,0]);
-  for (let i=0;i<4;i++) add(g, new THREE.TorusGeometry(5.3+i*.28, .09, 8, 48), MAT.gold, [0,28.4+i*1.8, 0], {rot:[Math.PI/2,0,0]});
+  for (let i=0;i<4;i++) add(g, torus(5.3+i*.28, .09, 8, 48), MAT.gold, [0,28.4+i*1.8, 0], {rot:[Math.PI/2,0,0]});
   const dome = add(g, new THREE.SphereGeometry(5.2, 48, 28, 0, TAU, 0, Math.PI/2), MAT.paint_magenta, [0,35.4,0]); dome.scale.set(1,.7,1);
-  add(g, new THREE.TorusGeometry(5.3,.11,8,48), MAT.gold, [0,35.5,0], {rot:[Math.PI/2,0,0]});
+  add(g, torus(5.3,.11,8,48), MAT.gold, [0,35.5,0], {rot:[Math.PI/2,0,0]});
   add(g, new THREE.CylinderGeometry(.12,.22,10,8), MAT.gold, [0,43,0]);
   add(g, new THREE.OctahedronGeometry(.8,0), MAT.neon('#ffe48e',4), [0,48,0], {cast:false}).userData.noMerge=true;
   // giant face / sun window on the front
   const dial = new THREE.Group();
   add(dial, new THREE.CircleGeometry(4.1,64), MAT.sign(TEX.screenFace,1), [0,0,.04]);
-  add(dial, new THREE.TorusGeometry(4.32,.2,12,64), MAT.gold, [0,0,0]);
+  add(dial, torus(4.32,.2,12,64), MAT.gold, [0,0,0]);
   for(let i=0;i<16;i++){const a=i/16*TAU; add(dial, rBox(.17,1.2,.1,.02), MAT.gold, [Math.cos(a)*4.7,Math.sin(a)*4.7,0], {rot:[0,0,a]});}
   dial.position.set(0,22.4,6.2); g.add(dial);
   // stacked windows and balconies
   for (let row=0; row<2; row++) for (let c=0;c<5;c++) {
-    const w=windowUnit(1.2,1.4,{glass:row?MAT.glassBlue:MAT.glassWarm,frameMat:MAT.creamTrim}); w.position.set(-5.2+c*2.6, 20+row*2.0, 6.05); g.add(w);
+    const w=windowUnit(1.2,1.4,{glass:row?MAT.glassBlue:MAT.glassWarm,frameMat:MAT.creamTrim,style:'hero'}); w.position.set(-5.2+c*2.6, 20+row*2.0, 6.05); g.add(w);
   }
   const b=balcony(13.5,1.1,{slabMat:MAT.gold, railMat:MAT.whiteTrim}); b.position.set(0,14.8,6.4); g.add(b);
   // side glass elevator and hovering crown rings
   add(g, cyl(.9,.9,20,24,true), MAT.glassClear, [-8.9,14,0], {cast:false});
-  for (let i=0;i<7;i++) add(g, new THREE.TorusGeometry(.95,.035,6,24), MAT.gold, [-8.9,4+i*3,0], {rot:[Math.PI/2,0,0]});
-  for (let i=0;i<3;i++) add(g, new THREE.TorusGeometry(8.8+i*1.0,.08,8,64), MAT.gold, [0,40+i*2.0,0], {rot:[Math.PI/2,0,0]});
+  for (let i=0;i<7;i++) add(g, torus(.95,.035,6,24), MAT.gold, [-8.9,4+i*3,0], {rot:[Math.PI/2,0,0]});
+  for (let i=0;i<3;i++) add(g, torus(8.8+i*1.0,.08,8,64), MAT.gold, [0,40+i*2.0,0], {rot:[Math.PI/2,0,0]});
   return g;
 }

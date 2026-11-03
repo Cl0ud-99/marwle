@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {
-  canvasTexture, glowTexture, softCloudTexture, roundRect, textTexture, makeFlagTexture
+  canvasTexture, glowTexture, textTexture, makeFlagTexture, rng
 } from './utils.js';
 
 import asphaltDiff from '../assets/asphalt_diff.jpg';
@@ -33,13 +33,6 @@ function configure(tex, { srgb = false, repeat = [1,1], aniso = 8 } = {}) {
   return tex;
 }
 
-function cloneRepeat(tex, repeat) {
-  const t = tex.clone();
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(repeat[0], repeat[1]);
-  t.needsUpdate = true;
-  return t;
-}
 
 async function loadImage(url) {
   const img = new Image();
@@ -74,6 +67,27 @@ function desaturatedTexture(img, amount = .7, maxSize = 1024) {
   return t;
 }
 
+/** Soft grime/AO sheet for walls: large blotches plus vertical run-off streaks. */
+function wallAOTexture() {
+  return canvasTexture(512, 512, (ctx, w, h) => {
+    const r = rng(7331);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h);
+    for (let i = 0; i < 36; i++) {
+      const x = r() * w, y = r() * h, rad = 30 + r() * 110;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
+      g.addColorStop(0, 'rgba(0,0,0,' + (.05 + r() * .07) + ')');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill();
+    }
+    for (let i = 0; i < 20; i++) {
+      const x = r() * w, y0 = r() * h, len = h * (.2 + r() * .5);
+      const g = ctx.createLinearGradient(0, y0, 0, y0 + len);
+      g.addColorStop(0, 'rgba(0,0,0,.09)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.fillRect(x, y0, 2 + r() * 5, len);
+    }
+  }, { linear: true, repeat: [2.2, 2.2] });
+}
+
 export function stripeTexture(a = '#ff6d75', b = '#fff2d6', count = 12, vertical = true) {
   return canvasTexture(512, 512, (ctx, w, h) => {
     ctx.fillStyle = b; ctx.fillRect(0,0,w,h);
@@ -83,15 +97,20 @@ export function stripeTexture(a = '#ff6d75', b = '#fff2d6', count = 12, vertical
       if (vertical) ctx.fillRect(i*step, 0, step, h);
       else ctx.fillRect(0, i*step, w, step);
     }
-    // fabric grain
+    // fabric grain (seeded so reloads stay pixel-identical)
+    const gr = rng(9001);
     ctx.globalAlpha = .06; ctx.fillStyle = '#000';
-    for (let i = 0; i < 900; i++) ctx.fillRect(Math.random()*w, Math.random()*h, 1, 2);
+    for (let i = 0; i < 1200; i++) ctx.fillRect(gr()*w, gr()*h, 1, 2);
     ctx.globalAlpha = 1;
   }, { repeat: [1,1] });
 }
 
+const shopWindowCache = new Map();
 function shopWindowTexture(seed = 3, hue = '#ffbf6e') {
-  return canvasTexture(768, 512, (ctx, w, h) => {
+  const key = seed + '|' + hue;
+  const cached = shopWindowCache.get(key);
+  if (cached) return cached;
+  const tex = canvasTexture(768, 512, (ctx, w, h) => {
     const g = ctx.createLinearGradient(0,0,0,h);
     g.addColorStop(0, '#182a3b'); g.addColorStop(.15, '#295e66'); g.addColorStop(.4, hue); g.addColorStop(1, '#ffdcae');
     ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
@@ -122,6 +141,8 @@ function shopWindowTexture(seed = 3, hue = '#ffbf6e') {
     sheen.addColorStop(0,'rgba(195,245,255,.28)'); sheen.addColorStop(.35,'rgba(255,255,255,0)'); sheen.addColorStop(.7,'rgba(255,255,255,.08)'); sheen.addColorStop(1,'rgba(145,220,255,.14)');
     ctx.fillStyle=sheen; ctx.fillRect(0,0,w,h);
   }, { clamp: true });
+  shopWindowCache.set(key, tex);
+  return tex;
 }
 
 function posterTexture(title, sub, palette) {
@@ -150,7 +171,7 @@ function posterTexture(title, sub, palette) {
 }
 
 export async function buildMaterials(renderer) {
-  const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  const aniso = Math.min(16, renderer.capabilities.getMaxAnisotropy());
   const [aImg, pImg, mImg, plImg] = await Promise.all([
     loadImage(asphaltDiff), loadImage(paversDiff), loadImage(marbleDiff), loadImage(plasterDiff)
   ]);
@@ -171,7 +192,6 @@ export async function buildMaterials(renderer) {
   TEX.asphaltAO.channel = 0; TEX.paversAO.channel = 0;
 
   TEX.glow = glowTexture(256);
-  TEX.cloud = softCloudTexture(256);
   TEX.flag = makeFlagTexture('#ff5579', '#ffe489');
   TEX.awningPink = stripeTexture('#ff6e7d', '#fff0d0', 10, true);
   TEX.awningMint = stripeTexture('#23b7b1', '#fff4dd', 10, true);
@@ -184,7 +204,7 @@ export async function buildMaterials(renderer) {
 
   // ── subtle facade patterns keep big surfaces from reading as plastic ──
   function wallPattern(kind = 'scallop') {
-    return canvasTexture(512, 512, (ctx, w, h) => {
+    return canvasTexture(1024, 1024, (ctx, w, h) => {
       ctx.fillStyle = '#cfc5b6'; ctx.fillRect(0,0,w,h);
       ctx.strokeStyle = 'rgba(255,248,231,.60)';
       ctx.fillStyle = 'rgba(255,248,231,.42)';
@@ -216,28 +236,23 @@ export async function buildMaterials(renderer) {
         for(let y=0;y<h;y+=52) for(let x=0;x<w;x+=52){
           if((x/52+y/52)%2===0) ctx.fillRect(x,y,26,26);
         }
-      } else if (kind === 'rays') {
-        for(let i=0;i<18;i++){
-          const a=i/18*Math.PI*2;
-          ctx.beginPath(); ctx.moveTo(w/2,h/2);
-          ctx.lineTo(w/2+Math.cos(a)*w*.75,h/2+Math.sin(a)*w*.75); ctx.stroke();
-        }
       }
       // micro grain + lower wall weathering
       ctx.globalAlpha=.08;
-      for(let i=0;i<1800;i++){ctx.fillStyle=Math.random()>.5?'#fff':'#5d4b3e';ctx.fillRect(Math.random()*w,Math.random()*h,1.5,2);}
+      const wg = rng(1337);
+      for(let i=0;i<7200;i++){ctx.fillStyle=wg()>.5?'#fff':'#5d4b3e';ctx.fillRect(wg()*w,wg()*h,1.5,2);}
       ctx.globalAlpha=1;
       const grime=ctx.createLinearGradient(0,h*.55,0,h);
       grime.addColorStop(0,'rgba(84,55,45,0)');grime.addColorStop(1,'rgba(84,55,45,.17)');
       ctx.fillStyle=grime;ctx.fillRect(0,h*.55,w,h*.45);
     }, { repeat: [2.2,2.2] });
   }
+  TEX.wallAO = wallAOTexture();
   TEX.patternScallop = wallPattern('scallop');
   TEX.patternStripe = wallPattern('stripe');
   TEX.patternDot = wallPattern('dot');
   TEX.patternArch = wallPattern('arch');
   TEX.patternCheck = wallPattern('check');
-  TEX.patternRays = wallPattern('rays');
 
   // ── paint and trim ──────────────────────────────────────────
   const paints = {
@@ -258,8 +273,8 @@ export async function buildMaterials(renderer) {
     MAT['paint_' + name] = new THREE.MeshPhysicalMaterial({
       color, map: patternFor[name] ?? TEX.plaster, roughness: .47, metalness: .03,
       clearcoat: .55, clearcoatRoughness: .26,
-      normalMap: TEX.plasterN, normalScale: new THREE.Vector2(.34,.34),
-      roughnessMap: TEX.plasterR, envMapIntensity: 1.28
+      normalMap: TEX.plasterN, normalScale: new THREE.Vector2(.55,.55),
+      roughnessMap: TEX.plasterR, aoMap: TEX.wallAO, aoMapIntensity: .32, envMapIntensity: 1.28
     });
   }
   MAT.paint_glossRed = new THREE.MeshPhysicalMaterial({
@@ -274,15 +289,17 @@ export async function buildMaterials(renderer) {
 
   // ── surfaces ────────────────────────────────────────────────
   MAT.road = new THREE.MeshPhysicalMaterial({
-    color: '#d5d4cb', map: TEX.asphalt, normalMap: TEX.asphaltN, normalScale: new THREE.Vector2(.55,.55),
-    roughnessMap: TEX.asphaltR, roughness: .58, metalness: .03, clearcoat: .55, clearcoatRoughness: .22, envMapIntensity: 1.0
+    color: '#d5d4cb', map: TEX.asphalt, normalMap: TEX.asphaltN, normalScale: new THREE.Vector2(.85,.85),
+    roughnessMap: TEX.asphaltR, aoMap: TEX.asphaltAO, aoMapIntensity: .9,
+    roughness: .58, metalness: .03, clearcoat: .55, clearcoatRoughness: .22, envMapIntensity: 1.0
   });
   MAT.sidewalk = new THREE.MeshPhysicalMaterial({
-    color: '#f4ddbe', map: TEX.pavers, normalMap: TEX.paversN, normalScale: new THREE.Vector2(.7,.7),
-    roughnessMap: TEX.paversR, roughness: .62, clearcoat: .24, clearcoatRoughness: .4, envMapIntensity: .8
+    color: '#f4ddbe', map: TEX.pavers, normalMap: TEX.paversN, normalScale: new THREE.Vector2(1.0,1.0),
+    roughnessMap: TEX.paversR, aoMap: TEX.paversAO, aoMapIntensity: 1.0,
+    roughness: .62, clearcoat: .24, clearcoatRoughness: .4, envMapIntensity: .8
   });
   MAT.marble = new THREE.MeshPhysicalMaterial({
-    color: '#f8e6dc', map: TEX.marble, normalMap: TEX.marbleN, normalScale: new THREE.Vector2(.45,.45),
+    color: '#f8e6dc', map: TEX.marble, normalMap: TEX.marbleN, normalScale: new THREE.Vector2(.7,.7),
     roughnessMap: TEX.marbleR, roughness: .35, clearcoat: .65, clearcoatRoughness: .2, envMapIntensity: 1.2
   });
   MAT.curb = new THREE.MeshPhysicalMaterial({ color: '#f1dcc0', roughness: .55, clearcoat: .2, envMapIntensity: .8 });
@@ -297,20 +314,20 @@ export async function buildMaterials(renderer) {
   MAT.darkMetal = new THREE.MeshStandardMaterial({ color: '#1b2933', roughness: .3, metalness: .75, envMapIntensity: 1.2 });
   MAT.redMetal = new THREE.MeshStandardMaterial({ color: '#c92e3b', roughness: .2, metalness: .6, envMapIntensity: 1.6 });
   MAT.glassDark = new THREE.MeshPhysicalMaterial({
-    color: '#123746', roughness: .055, metalness: .55, clearcoat: 1, clearcoatRoughness: .04,
-    envMapIntensity: 2.35, iridescence: .22, iridescenceIOR: 1.4
+    color: '#123746', roughness: .045, metalness: .55, clearcoat: 1, clearcoatRoughness: .025,
+    envMapIntensity: 2.7, iridescence: .32, iridescenceIOR: 1.45
   });
   MAT.glassBlue = new THREE.MeshPhysicalMaterial({
-    color: '#1d6586', roughness: .06, metalness: .45, clearcoat: 1, clearcoatRoughness: .04,
-    envMapIntensity: 2.2
+    color: '#1d6586', roughness: .05, metalness: .45, clearcoat: 1, clearcoatRoughness: .03,
+    envMapIntensity: 2.5, iridescence: .16, iridescenceIOR: 1.35
   });
   MAT.glassWarm = new THREE.MeshPhysicalMaterial({
-    color: '#ffd192', roughness: .08, metalness: .15, clearcoat: 1, clearcoatRoughness: .04,
-    envMapIntensity: 2.2, emissive: '#ff9d45', emissiveIntensity: .22
+    color: '#ffd192', roughness: .07, metalness: .15, clearcoat: 1, clearcoatRoughness: .03,
+    envMapIntensity: 2.5, emissive: '#ff9d45', emissiveIntensity: .28
   });
   MAT.glassClear = new THREE.MeshPhysicalMaterial({
-    color: '#cdeff4', roughness: .035, metalness: .08, transparent: true, opacity: .24,
-    clearcoat: 1, clearcoatRoughness: .02, envMapIntensity: 2.4, depthWrite: false, side: THREE.DoubleSide
+    color: '#cdeff4', roughness: .03, metalness: .08, transparent: true, opacity: .26,
+    clearcoat: 1, clearcoatRoughness: .015, envMapIntensity: 2.6, depthWrite: false, side: THREE.DoubleSide
   });
   MAT.shopWindows = new THREE.MeshPhysicalMaterial({
     map: shopWindowTexture(3, '#ffbd68'), emissiveMap: shopWindowTexture(3, '#ffbd68'),
@@ -362,10 +379,19 @@ export async function buildMaterials(renderer) {
     }
     return MAT[key];
   };
-  MAT.sign = (tex, intensity = 1.15) => new THREE.MeshBasicMaterial({
-    map: tex, toneMapped: false,
-    color: new THREE.Color().setScalar(intensity)
-  });
+  const signCache = new Map();
+  MAT.sign = (tex, intensity = 1.15) => {
+    const key = tex.uuid + '|' + intensity;
+    let mat = signCache.get(key);
+    if (!mat) {
+      mat = new THREE.MeshBasicMaterial({
+        map: tex, toneMapped: false,
+        color: new THREE.Color().setScalar(intensity)
+      });
+      signCache.set(key, mat);
+    }
+    return mat;
+  };
   MAT.glowSprite = (color = '#ffd9a0', opacity = .5) => new THREE.SpriteMaterial({
     map: TEX.glow, color, transparent: true, opacity, depthWrite: false,
     blending: THREE.AdditiveBlending, toneMapped: false

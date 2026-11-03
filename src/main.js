@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { buildMaterials, MAT } from './materials.js';
+import { setDetail } from './utils.js';
+import { QUALITY, resolveQuality, setQuality } from './quality.js';
 import { buildSky, SUN_DIR } from './sky.js';
 import { buildCity } from './city.js';
 import { createPost } from './post.js';
@@ -13,13 +15,25 @@ import outfitUrl from '../assets/Outfit.woff2';
 // ─────────────────────────────────────────────────────────────
 
 const params = new URLSearchParams(location.search);
+const qualityName = resolveQuality(params);
+setQuality(qualityName);
+// geometry tessellation: ?detail=low|high|ultra, otherwise derived from quality
+const detailParam = params.get('detail');
+function resolveDetail(v) {
+  if (v === 'ultra' || v === 'low' || v === 'high') return v;
+  if (qualityName === 'draft') return 'low';
+  if (qualityName === 'photo') return 'ultra';
+  return 'high';
+}
+setDetail(resolveDetail(detailParam));
 const canvas = document.getElementById('stage');
 const loader = document.getElementById('loader');
 const loaderStatus = document.getElementById('loader-status');
 const loaderBar = document.getElementById('loader-bar');
 const app = document.getElementById('app');
 const debug = params.get('debug') === '1';
-const fixedTime = params.has('t') ? parseFloat(params.get('t')) : null;
+const fixedTimeParam = params.has('t') ? parseFloat(params.get('t')) : null;
+let fixedTime = Number.isFinite(fixedTimeParam) ? fixedTimeParam : null;
 const freeze = params.get('freeze') === '1';
 const shotParam = params.get('shot');
 const noUi = params.get('ui') === '0';
@@ -35,7 +49,7 @@ async function boot() {
   await wait(60);
 
   const fontStyle = document.createElement('style');
-  fontStyle.textContent = '$font-face{font-family:Bungee;src:url(' + bungeeUrl + ') format("woff2");font-weight:400;font-display:block}$font-face{font-family:Outfit;src:url(' + outfitUrl + ') format("woff2");font-weight:100 900;font-display:block}';
+  fontStyle.textContent = '@font-face{font-family:Bungee;src:url(' + bungeeUrl + ') format("woff2");font-weight:400;font-display:block}@font-face{font-family:Outfit;src:url(' + outfitUrl + ') format("woff2");font-weight:100 900;font-display:block}';
   document.head.appendChild(fontStyle);
   await Promise.all([document.fonts.load('16px Bungee'), document.fonts.load('400 16px Outfit'), document.fonts.load('700 16px Outfit')]);
   await document.fonts.ready;
@@ -44,8 +58,7 @@ async function boot() {
     canvas, antialias: false, alpha: false, powerPreference: 'high-performance',
     stencil: false, preserveDrawingBuffer: false
   });
-  const dpr = Math.min(window.devicePixelRatio || 1, params.get('quality') === 'low' ? 1 : 1.35);
-  renderer.setPixelRatio(dpr);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, QUALITY.dpr));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NoToneMapping;
@@ -57,6 +70,7 @@ async function boot() {
 
   const camera = new THREE.PerspectiveCamera(51, window.innerWidth/window.innerHeight, .08, 2200);
   camera.position.set(3.2, 2.45, 24);
+  camera.layers.enable(1); // layer 1 = moving street props, hidden from the mirror
   scene.add(camera);
 
   setLoad(.18, 'MIXING CANDY PIGMENTS');
@@ -75,7 +89,7 @@ async function boot() {
   sun.position.set(-100, 65, 110);
   sun.target.position.copy(sunTarget);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(4096, 4096);
+  sun.shadow.mapSize.set(QUALITY.shadowMap, QUALITY.shadowMap);
   sun.shadow.camera.left = -65;
   sun.shadow.camera.right = 65;
   sun.shadow.camera.top = 82;
@@ -101,8 +115,24 @@ async function boot() {
   scene.add(low);
 
   setLoad(.88, 'SETTING THE CAMERA');
-  const post = createPost(renderer, scene, camera);
+  const post = createPost(renderer, scene, camera, { msaa: QUALITY.msaa, bloom: QUALITY.bloom });
   const audio = createAudio();
+
+  // ── runtime quality switch (walk ↔ cinematic ↔ photo) ──────
+  function applyQuality(name) {
+    const q = setQuality(name);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.dpr));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    post.setQuality(q);
+    city.water.setQuality(q);
+    if (sun.shadow.mapSize.x !== q.shadowMap) {
+      sun.shadow.mapSize.set(q.shadowMap, q.shadowMap);
+      if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+      if (sun.shadow.mapPass) { sun.shadow.mapPass.dispose(); sun.shadow.mapPass = null; }
+      renderer.shadowMap.needsUpdate = true;
+    }
+    document.body.dataset.quality = q.name;
+  }
 
   // ── presentation camera moves ──────────────────────────────
   const SHOTS = {
@@ -120,7 +150,6 @@ async function boot() {
 
   const lookTarget = new THREE.Vector3();
   const camPos = new THREE.Vector3();
-  const desiredPos = new THREE.Vector3();
 
   function applyShot(name) {
     const s = SHOTS[name] || SHOTS.hero;
@@ -161,8 +190,17 @@ async function boot() {
   // ── free walk ──────────────────────────────────────────────
   const player = {
     pos:new THREE.Vector3(2.4,1.72,20.5), yaw:-.02, pitch:.01,
-    vel:new THREE.Vector3(), bob:0, moving:false
+    vel:new THREE.Vector3(), bob:0, moving:false,
+    // vertical state: y = height above the pavement, vy = vertical velocity
+    y:0, vy:0, grounded:true, land:0
   };
+  const GRAVITY = 19.0;
+  const JUMP_SPEED = 5.6;
+  function jump() {
+    if (mode !== 'explore' || !player.grounded) return;
+    player.vy = JUMP_SPEED;
+    player.grounded = false;
+  }
   function ensureAudio() {
     audio.start();
     const b=document.getElementById('sound-btn');
@@ -174,11 +212,13 @@ async function boot() {
 
   function enterExplore() {
     mode = 'explore';
+    applyQuality(qualityName);
     document.body.classList.remove('intro','cinema','photo');
     document.body.classList.add('explore');
     document.getElementById('intro')?.classList.add('gone');
     player.pos.set(2.0, 1.72, 26.4);
     player.yaw = -.01; player.pitch = .015; player.vel.set(0,0,0);
+    player.y = 0; player.vy = 0; player.grounded = true; player.land = 0;
     camera.position.copy(player.pos);
     camera.fov = 60; camera.updateProjectionMatrix();
     camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
@@ -188,6 +228,7 @@ async function boot() {
   function startCinema() {
     mode = 'cinematic';
     cinemaStart = elapsed;
+    applyQuality(qualityName);
     document.body.classList.remove('intro','explore','photo');
     document.body.classList.add('cinema');
     document.getElementById('intro')?.classList.add('gone');
@@ -196,6 +237,7 @@ async function boot() {
   }
   function enterPhoto() {
     mode = 'photo';
+    applyQuality('photo');
     document.body.classList.remove('intro','cinema','explore');
     document.body.classList.add('photo');
     document.getElementById('intro')?.classList.add('gone');
@@ -226,12 +268,27 @@ async function boot() {
       if (d < 9.5 && d > .01) { player.pos.x = dx/d*9.5; player.pos.z = -72 + dz/d*9.5; }
     }
     player.pos.z = THREE.MathUtils.clamp(player.pos.z, -95, 20.5);
+
+    // ── jump / gravity ────────────────────────────────────────
+    if (!player.grounded) {
+      player.vy -= GRAVITY * dt;
+      player.y += player.vy * dt;
+      if (player.y <= 0) {
+        player.y = 0;
+        player.grounded = true;
+        player.land = 1; // short landing dip, decays below
+      }
+    }
+    player.land = Math.max(0, player.land - dt * 4.2);
+    const landDip = Math.sin(player.land * Math.PI) * .085;
+
     const speed = player.vel.length();
     player.bob += dt * (2.4 + speed*.85);
-    const bobY = Math.sin(player.bob*2.1) * Math.min(.035, speed*.012) + Math.sin(player.bob)*.006;
-    camera.position.set(player.pos.x, 1.72 + bobY, player.pos.z);
+    const air = player.grounded ? 1 : .25;
+    const bobY = (Math.sin(player.bob*2.1) * Math.min(.035, speed*.012) + Math.sin(player.bob)*.006) * air;
+    camera.position.set(player.pos.x, 1.72 + player.y + bobY - landDip, player.pos.z);
     camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
-    camera.position.x += Math.sin(player.bob*.5)*.008;
+    camera.position.x += Math.sin(player.bob*.5)*.008 * air;
   }
 
   // ── events ─────────────────────────────────────────────────
@@ -255,7 +312,8 @@ async function boot() {
   document.addEventListener('pointercancel', () => { drag=null; canvas.classList.remove('dragging'); });
   window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-    if (['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight'].includes(e.code)) keysDown.add(e.code);
+    if (['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','Space'].includes(e.code)) keysDown.add(e.code);
+    if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) jump(); }
     if (e.code === 'KeyC') { startCinema(); }
     if (e.code === 'KeyP') { if (mode==='photo') enterExplore(); else enterPhoto(); }
     if (e.code === 'KeyH') { document.body.classList.toggle('hide-ui'); }
@@ -318,7 +376,7 @@ async function boot() {
   function resize() {
     const w = window.innerWidth, h = window.innerHeight;
     camera.aspect = w/h; camera.updateProjectionMatrix();
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, params.get('quality')==='low'?1:1.35));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, QUALITY.dpr));
     renderer.setSize(w,h);
     post.composer.setPixelRatio(renderer.getPixelRatio());
     post.resize(w,h);
@@ -327,6 +385,7 @@ async function boot() {
   window.addEventListener('resize', resize);
 
   bindUI();
+  applyQuality(qualityName);
   setModeForParams();
 
   // initial data for debugging and external capture tools
@@ -335,7 +394,9 @@ async function boot() {
     setShot:(name)=>{ enterPhoto(); applyShot(name); },
     setMode:(m)=>{ if(m==='explore')enterExplore(); else if(m==='cinema')startCinema(); else if(m==='photo')enterPhoto(); },
     get mode(){return mode;},
-    setTime:(v)=>{ /* use fixed time in capture mode */ }
+    get quality(){ return QUALITY.name; },
+    setQuality:(n)=>{ applyQuality(n); },
+    setTime:(v)=>{ const n = Number(v); if (Number.isFinite(n)) fixedTime = n; }
   };
 
   // compile and warm up (also pre-renders the mirror before the first unveiled frame)
@@ -351,8 +412,10 @@ async function boot() {
   loader.classList.add('done');
   setTimeout(()=>loader.remove(), 900);
 
+  if (debug) renderer.info.autoReset = false;
   function frame() {
     requestAnimationFrame(frame);
+    if (debug) renderer.info.reset();
     const dt = Math.min(.05, clock.getDelta());
     elapsed += dt;
     const t = freeze ? (fixedTime ?? 9.0) : elapsed;

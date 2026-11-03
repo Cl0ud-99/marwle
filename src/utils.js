@@ -112,36 +112,33 @@ export function glowTexture(size = 128, stops = null) {
   }, { clamp: true });
 }
 
-export function softCloudTexture(size = 256) {
-  const puffs = [
-    [.50,.56,.18,.14],[.34,.59,.16,.12],[.66,.59,.17,.12],
-    [.42,.45,.15,.12],[.58,.46,.14,.11],[.50,.38,.12,.10],
-    [.24,.63,.11,.08],[.76,.63,.10,.07]
-  ];
-  return canvasTexture(size, size, (ctx) => {
-    ctx.clearRect(0, 0, size, size);
-    const blob = (fx, fy, frx, fry, a, col) => {
-      const rx = frx*size, ry = fry*size, R = Math.max(rx,ry);
-      ctx.save(); ctx.translate(fx*size, fy*size); ctx.scale(rx/R, ry/R);
-      const g = ctx.createRadialGradient(0, -R*.2, R*.015, 0, 0, R);
-      g.addColorStop(0, 'rgba(' + col + ',' + a + ')');
-      g.addColorStop(.32, 'rgba(' + col + ',' + (a*.83) + ')');
-      g.addColorStop(.64, 'rgba(' + col + ',' + (a*.35) + ')');
-      g.addColorStop(1, 'rgba(' + col + ',0)');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0,0,R,0,TAU); ctx.fill(); ctx.restore();
-    };
-    for (const p of puffs) blob(p[0], p[1]+.035, p[2]*1.04, p[3]*.88, .42, '154,194,222');
-    for (const p of puffs) blob(p[0], p[1], p[2], p[3], .9, '255,252,245');
-    for (const p of puffs) blob(p[0]-.015, p[1]-.03, p[2]*.7, p[3]*.62, .55, '255,255,250');
-  }, { clamp: true });
+
+// ─────────────────────────────────────────────────────────────
+//  Detail tiers. The whole city is procedural, so tessellation is a
+//  single dial: "low" for weak GPUs, "high" for the default look and
+//  "ultra" when you want the curves to read perfectly up close.
+//  setDetail() is called once from main.js before anything is built.
+// ─────────────────────────────────────────────────────────────
+export const DETAIL = { level: 'high', box: 4, mul: 1.6, sphereW: 56, sphereH: 36, cyl: 72, torusRadial: 16, torusTubular: 112 };
+
+export function setDetail(level = 'high') {
+  if (level === 'low') Object.assign(DETAIL, { level: 'low', box: 2, mul: .8, sphereW: 24, sphereH: 16, cyl: 32, torusRadial: 8, torusTubular: 64 });
+  else if (level === 'ultra') Object.assign(DETAIL, { level: 'ultra', box: 6, mul: 2.0, sphereW: 88, sphereH: 56, cyl: 96, torusRadial: 22, torusTubular: 144 });
+  else Object.assign(DETAIL, { level: 'high', box: 4, mul: 1.6, sphereW: 56, sphereH: 36, cyl: 72, torusRadial: 16, torusTubular: 112 });
+  return DETAIL;
 }
 
-export function rBox(w, h, d, r = .06, seg = 3) {
-  seg = Math.min(seg, 2);
-  return new RoundedBoxGeometry(w, h, d, seg, Math.min(r, w * .45, h * .45, d * .45));
+const seg = (n, cap) => Math.max(3, Math.min(Math.round(n * DETAIL.mul), cap));
+
+export function rBox(w, h, d, r = .06, seg0 = 3) {
+  const s = Math.min(seg0, DETAIL.box);
+  return new RoundedBoxGeometry(w, h, d, s, Math.min(r, w * .45, h * .45, d * .45));
 }
-export function cyl(rt, rb, h, seg = 32, open = false) { return new THREE.CylinderGeometry(rt, rb, h, Math.min(seg, 40), 1, open); }
-export function sphere(r = 1, w = 32, h = 24) { return new THREE.SphereGeometry(r, Math.min(w, 24), Math.min(h, 16)); }
+export function cyl(rt, rb, h, radial = 32, open = false) { return new THREE.CylinderGeometry(rt, rb, h, seg(radial, DETAIL.cyl), 1, open); }
+export function sphere(r = 1, w = 32, h = 24) { return new THREE.SphereGeometry(r, seg(w, DETAIL.sphereW), seg(h, DETAIL.sphereH)); }
+export function torus(r = 1, tube = .1, radial = 12, tubular = 48, arc = TAU) {
+  return new THREE.TorusGeometry(r, tube, seg(radial, DETAIL.torusRadial), seg(tubular, DETAIL.torusTubular), arc);
+}
 export function plane(w, h, ws = 1, hs = 1) { return new THREE.PlaneGeometry(w, h, ws, hs); }
 
 export function mesh(geo, mat, opts = {}) {
@@ -174,20 +171,7 @@ export function cylinderBetween(a, b, r, mat, seg = 12) {
   return m;
 }
 
-export function starShape(radius = .2, inner = .46, spikes = 5) {
-  const s = new THREE.Shape();
-  for (let i = 0; i < spikes * 2; i++) {
-    const a = i * Math.PI / spikes - Math.PI / 2;
-    const r = i % 2 ? radius * inner : radius;
-    const x = Math.cos(a) * r, y = Math.sin(a) * r;
-    if (i === 0) s.moveTo(x, y); else s.lineTo(x, y);
-  }
-  s.closePath(); return s;
-}
 
-export function starGeo(radius = .2, depth = .05) {
-  return new THREE.ExtrudeGeometry(starShape(radius), { depth, bevelEnabled: true, bevelSegments: 2, steps: 1, bevelSize: radius*.06, bevelThickness: depth*.3, curveSegments: 3 });
-}
 
 export function makeInstanced(geo, mat, transforms, cast = true, receive = true) {
   const im = new THREE.InstancedMesh(geo, mat, transforms.length);
@@ -206,13 +190,26 @@ export function makeInstanced(geo, mat, transforms, cast = true, receive = true)
   return im;
 }
 
-/** Merge ordinary opaque meshes sharing a material into a few draw calls. */
-export function mergeStatic(root) {
+/** Merge ordinary opaque meshes sharing a material into a few draw calls.
+ *  opts.local bakes child transforms relative to root — use it for prop groups
+ *  that move as a unit (a cart, a pedestrian, a fountain), so their internals
+ *  collapse into a handful of draws without breaking the group transform. */
+export function mergeStatic(root, opts = {}) {
+  const local = opts.local === true;
   root.updateMatrixWorld(true);
+  const rootInverse = local ? root.matrixWorld.clone().invert() : null;
   const buckets = new Map();
+  const isUnderNoMerge = (o) => {
+    let node = o;
+    while (node && node !== root) {
+      if (node.userData.noMerge) return true;
+      node = node.parent;
+    }
+    return false;
+  };
   root.traverse(o => {
     if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh) return;
-    if (!o.visible || o.userData.noMerge) return;
+    if (!o.visible || isUnderNoMerge(o)) return;
     const mat = o.material;
     if (Array.isArray(mat) || !mat || mat.transparent || mat.isShaderMaterial || mat.depthWrite === false) return;
     if (!o.geometry || !o.geometry.attributes.position) return;
@@ -220,9 +217,12 @@ export function mergeStatic(root) {
     if (!buckets.has(key)) buckets.set(key, { mat, geos: [], meshes: [] });
     const b = buckets.get(key);
     const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
-    g.applyMatrix4(o.matrixWorld);
+    if (local) g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(rootInverse, o.matrixWorld));
+    else g.applyMatrix4(o.matrixWorld);
+    // Keep optional channels that material features may rely on (vertex tint,
+    // a second UV set, tangents). Anything else is dropped before merging.
     for (const name of Object.keys(g.attributes)) {
-      if (!['position','normal','uv'].includes(name)) g.deleteAttribute(name);
+      if (!['position','normal','uv','color','uv1','tangent'].includes(name)) g.deleteAttribute(name);
     }
     if (!g.attributes.normal) g.computeVertexNormals();
     if (!g.attributes.uv) {
@@ -234,9 +234,16 @@ export function mergeStatic(root) {
   });
   const merged = [];
   const container = new THREE.Group();
-  container.name = 'merged-static';
+  container.name = local ? ((root.name || 'prop') + '-merged') : 'merged-static';
   for (const { mat, geos, meshes } of buckets.values()) {
     if (geos.length < 2) continue;
+    // mergeGeometries requires identical attribute sets, so an optional channel
+    // survives only when every mesh in the bucket carries it.
+    for (const extra of ['color', 'uv1', 'tangent']) {
+      if (!geos.every(g => g.attributes[extra])) {
+        for (const g of geos) if (g.attributes[extra]) g.deleteAttribute(extra);
+      }
+    }
     const g = mergeGeometries(geos, false);
     if (!g) continue;
     const m = new THREE.Mesh(g, mat);

@@ -124,11 +124,11 @@ class RaysPass extends Pass {
   }
 }
 
-export function createPost(renderer, scene, camera) {
+export function createPost(renderer, scene, camera, options = {}) {
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
   const rt = new THREE.WebGLRenderTarget(size.x, size.y, {
     type: THREE.HalfFloatType,
-    samples: 2,
+    samples: options.msaa ?? 2,
     colorSpace: THREE.NoColorSpace
   });
   const composer = new EffectComposer(renderer, rt);
@@ -137,15 +137,30 @@ export function createPost(renderer, scene, camera) {
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
 
+  // Ambient occlusion is opt-in: it is the cheapest way to make the new
+  // window reveals and cornice profiles read as depth rather than decals.
   const gtao = new GTAOPass(scene, camera, Math.floor(size.x * .55), Math.floor(size.y * .55));
   gtao.output = GTAOPass.OUTPUT.Default;
-  gtao.blendIntensity = 1.6;
-  gtao.updateGtaoMaterial({ radius: 1.0, distanceExponent: 1.4, thickness: 1.15, scale: 1.15, samples: 24, screenSpaceRadius: false });
-  gtao.updatePdMaterial({ lumaPhi: 14, depthPhi: 3, normalPhi: 4, radius: 9, rings: 2, samples: 20 });
+  gtao.blendIntensity = .5;
+  gtao.updateGtaoMaterial({ radius: .75, distanceExponent: 1.2, thickness: .9, scale: 1.0, samples: 16, screenSpaceRadius: false });
+  gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
   gtao.enabled = false;
+  // GTAOPass re-renders the scene with an override material. The planar mirror
+  // has an onBeforeRender hook, so leaving it visible would recursively render
+  // the reflection inside the AO pass (and blank the frame). Hide it for the pass.
+  const mirror = scene.getObjectByName('water-mirror');
+  if (mirror) {
+    const renderAO = gtao.render.bind(gtao);
+    gtao.render = function (renderer, writeBuffer, readBuffer) {
+      const visible = mirror.visible;
+      mirror.visible = false;
+      try { renderAO(renderer, writeBuffer, readBuffer); }
+      finally { mirror.visible = visible; }
+    };
+  }
   composer.addPass(gtao);
 
-  const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), .22, .45, 1.04);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), options.bloom ?? .22, .45, 1.04);
   composer.addPass(bloom);
   const rays = new RaysPass(window.innerWidth, window.innerHeight);
   composer.addPass(rays);
@@ -166,11 +181,17 @@ export function createPost(renderer, scene, camera) {
     final.uniforms.uResolution.value.set(renderer.domElement.width, renderer.domElement.height);
   }
   function resize(w,h) {
+    // composer.setSize already forwards effective (pixel-ratio scaled) sizes to every pass
     composer.setSize(w,h);
-    bloom.setSize(w,h);
-    gtao.setSize(Math.floor(w*renderer.getPixelRatio()*.55), Math.floor(h*renderer.getPixelRatio()*.55));
     rays.setSize(w,h);
     final.uniforms.uResolution.value.set(w*renderer.getPixelRatio(), h*renderer.getPixelRatio());
   }
-  return { composer, bloom, rays, final, renderPass, gtao, update, resize };
+  function setQuality(q) {
+    composer.setPixelRatio(renderer.getPixelRatio());
+    composer.setSize(window.innerWidth, window.innerHeight);
+    bloom.strength = q.bloom;
+    gtao.enabled = !!q.ao;
+    if (q.ao) gtao.blendIntensity = q.aoIntensity ?? .5;
+  }
+  return { composer, bloom, rays, final, renderPass, gtao, update, resize, setQuality };
 }

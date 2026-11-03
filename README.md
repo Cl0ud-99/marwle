@@ -32,7 +32,8 @@ A one-scene interactive world preview with a small cinematic shell around it. Wa
 | `src/water.js` | planar reflection + wet-pavement shader |
 | `src/materials.js` | PBR materials, procedural facade patterns, sign canvases |
 | `src/sky.js` | 4096×2048 equirect sky, cumulus, PMREM environment |
-| `src/post.js` | HDR composer, bloom, sun scattering, ACES grade |
+| `src/post.js` | HDR composer, bloom, sun scattering, ACES grade, optional GTAO |
+| `src/quality.js` | quality presets (draft / standard / cinematic / photo) |
 | `src/audio.js` | procedural Web Audio ambience |
 | `site/` | built static site deployed to GitHub Pages |
 
@@ -45,10 +46,10 @@ A conventional forward renderer, but tuned around three things: reflections, bak
              │
              └──> scene background
 
-static city (≈2.5M tris)
-   ├──> 4096² sun shadow map, baked once
-   ├──> planar reflection RT (every other frame, 1024×573)
-   └──> HDR scene RT (2× MSAA)
+static city (≈4.5M tris at high detail)
+   ├──> sun shadow map, baked once (1024² / 2048² / 4096² by preset)
+   ├──> planar reflection RT (scaled 0.7–1.5×, 1–4 frame cadence, layer 0 only)
+   └──> HDR scene RT (0–4× MSAA) → optional GTAO
 
 HDR scene
    ├──> bloom
@@ -59,11 +60,17 @@ HDR scene
 
 Details worth reading:
 
-- **The shadow map is baked once.** The architecture is static, so the 4096² shadow map is rendered during the first frame and then frozen. Walk, fly or cut camera — the sun does not move.
-- **Planar reflections are throttled.** The mirror camera renders the full boulevard only every second frame at 1024×573. At walking pace the half-frame lag is invisible; it buys back a large slice of frame time.
+- **The shadow map is baked once.** The architecture is static, so the sun shadow map is rendered during the first frame and then frozen. Its resolution follows the quality preset (1024² draft, 2048² standard, 4096² cinematic/photo).
+- **Planar reflections are throttled and layer-culled.** The mirror camera renders only the static layer; the reflection scale and cadence follow the quality preset. Moving props live on layer 1 and stay out of the reflection pass entirely, which removes a large slice of draw calls.
+- **Photo mode is a different renderer.** `?shot=` and the `P` key switch to the photo preset: higher device pixel ratio, 4096² shadows, full-rate reflections and GTAO, so stills are much cleaner than the walk view.
+- **The shader rejects early.** The mirror plane is much larger than the area that can ever be wet, so the fragment shader discards anything outside the canal and pool bounds before it runs the noise and reflection taps.
 - **Reflection is masked, not global.** One mirror RT drives both the water lane and the plaza pool, plus the damp road sheen. The shader masks by world position so asphalt stays matte and the canal reads as wet.
-- **The whole static city is merged by material.** Hundreds of authored meshes collapse into roughly fifty draw calls; the remaining draw calls are moving characters, sprites, signs and transparent glass.
-- **Windows are the primary texture.** Most facade rhythm comes from real inset frames, sills, flower boxes, awnings, cornices and gold trim rather than baked normal maps. This keeps silhouettes readable from every angle at street level.
+- **The whole static city is merged by material.** Hundreds of authored meshes collapse into roughly sixty draw calls; the remaining draw calls are moving characters, sprites, signs and transparent glass.
+- **Moving props are merged in local space.** A pedestrian, cart, fountain or drone keeps one root transform for animation while its bodywork collapses into a handful of per-material meshes.
+- **Moving props do not bake shadows.** They are excluded from the frozen sun map and carry a soft contact patch instead, so nobody leaves a shadow behind.
+- **Hero windows have real depth.** On the three landmark buildings the glazing sits behind a projecting surround with four reveal jambs and a drip sill, so the sun drops a shadow into the opening. Background rows keep the cheap flat unit.
+- **Mouldings are profiled, not boxes.** Cornices are built from four stepped slabs (bed, fascia, cove, crown), and flat roofs carry AC units, vents, water tanks and antennas for a busier silhouette.
+- **Materials carry dirt.** Wall paints blend a seeded grime/AO sheet (large blotches plus run-off streaks), the ground uses real AO maps, and glass has stronger clearcoat and iridescence.
 
 ## Audio
 
@@ -100,6 +107,7 @@ No server is needed for the single file; every image, font and audio graph is em
 | Mouse drag | Look around |
 | W A S D / arrows | Walk |
 | Shift | Run |
+| Space | Jump |
 | C | Cinematic camera |
 | P | Photo mode (hide HUD; press again to return) |
 | 1 – 5 | Composed camera presets |
@@ -114,14 +122,19 @@ No server is needed for the single file; every image, font and audio graph is em
 | `?shot=hero` | Start on a fixed composed camera |
 | `shot=fountain,water,sign,street,skyline` | Other composed cameras |
 | `freeze=1&t=10` | Freeze the world clock at a chosen time |
-| `?quality=low` | Lower device pixel ratio |
+| `?quality=low` | Draft preset: 0.85× DPR, 1024² shadows, low detail |
+| `?quality=high` | Standard preset (default): 1.35× DPR cap, 2048² shadows |
+| `?quality=cinematic` | 1.5× DPR, 4096² shadows, 4× MSAA, GTAO |
+| `?quality=photo` | 1.75× DPR, 4096² shadows, 4× MSAA, GTAO, full-rate reflections |
+| `?detail=low` | Coarser geometry tessellation |
+| `?detail=ultra` | Higher geometry tessellation for close-ups |
 | `?cinema=1` | Start straight into the cinematic camera |
 
 Screenshots shown here were captured with `?shot=…&ui=0&freeze=1&t=10`.
 
 ## Deployment
 
-The **Deploy to GitHub Pages** workflow runs on every push to `main`, uploads `site/` and publishes it via GitHub Pages. There is no build step on the runner; the committed `site/` is the exact playable artifact, so a page that cannot load is caught before pushing.
+The **Deploy to GitHub Pages** workflow runs on every push to `main`, uploads `site/` and publishes it via GitHub Pages. `node build.mjs --site` emits a small `site/app.js` plus hashed, cacheable assets under `site/assets/`, while `--single` still inlines everything into one offline HTML. There is no build step on the runner; the committed `site/` is the exact playable artifact, so a page that cannot load is caught before pushing.
 
 The app uses relative paths and works both at a domain root and under the `/marwle/` sub-path used by Pages.
 

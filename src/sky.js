@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { canvasTexture, rng, TAU, lerp } from './utils.js';
+import { canvasTexture, rng, TAU } from './utils.js';
 
 // Direction *towards* the sun: high, camera-left, slightly down the avenue.
 export const SUN_DIR = new THREE.Vector3(-0.55, 0.34, 0.77).normalize();
@@ -230,117 +230,41 @@ export function buildSky(scene, renderer) {
   sunGroup.add(core);
   scene.add(sunGroup);
 
-  // soft three-dimensional clouds floating far over the avenue
-  const cloudTexture = canvasTexture(768,512,(ctx,w,h)=>{
-    ctx.clearRect(0,0,w,h);
-    const blobs=[[.5,.52,.16,.14],[.33,.56,.15,.12],[.67,.56,.16,.12],[.42,.42,.14,.11],[.59,.43,.13,.1],[.5,.34,.11,.09],[.23,.59,.1,.07],[.77,.59,.09,.06]];
-    const draw=(x,y,rx,ry,a,col)=>{
-      const R=Math.max(rx*w,ry*h);
-      ctx.save();ctx.translate(x*w,y*h);ctx.scale((rx*w)/R,(ry*h)/R);
-      const g=ctx.createRadialGradient(0,-R*.2,R*.01,0,0,R);
-      g.addColorStop(0,'rgba('+col+','+a+')');g.addColorStop(.38,'rgba('+col+','+(a*.72)+')');g.addColorStop(.7,'rgba('+col+','+(a*.22)+')');g.addColorStop(1,'rgba('+col+',0)');
-      ctx.fillStyle=g;ctx.beginPath();ctx.arc(0,0,R,0,TAU);ctx.fill();ctx.restore();
-    };
-    for(const p of blobs) draw(p[0],p[1]+.035,p[2]*1.05,p[3]*.9,.5,'142,184,214');
-    for(const p of blobs) draw(p[0],p[1],p[2],p[3],.95,'255,252,244');
-    for(const p of blobs) draw(p[0]-.012,p[1]-.025,p[2]*.72,p[3]*.64,.6,'255,255,250');
-  },{clamp:true});
-  const clouds = new THREE.Group();
-  const cloudMat = new THREE.SpriteMaterial({ map: cloudTexture, color:'#fffaf0', transparent:true, opacity:.78, depthWrite:false, toneMapped:false });
-  const specs = [
-    [-130, 72, -220, 110, 30], [50, 85, -260, 140, 36], [-10, 110, -300, 90, 28],
-    [130, 58, -170, 100, 26], [-180, 48, -140, 80, 20], [210, 95, -250, 130, 30],
-    [20, 50, -150, 55, 15], [-70, 38, -120, 45, 12]
-  ];
-  specs.forEach(([x,y,z,sx,sy],i)=>{
-    const sp=new THREE.Sprite(cloudMat.clone());
-    sp.position.set(x,y,z); sp.scale.set(sx,sy,1); sp.material.opacity=.4+ (i%3)*.12;
-    clouds.add(sp);
+  // The old sprite-cloud prototypes were never shown; the city builds real
+  // volumetric cloud banks. Keeping them cost ~100 sprite materials at boot.
+
+  // birds, tiny and bright — the scale cue that sells the sky.
+  // One merged V-shaped mesh instead of 12 alpha sprites: sprite alpha was
+  // unreliable against the HDR composer and showed as a grey quad.
+  const birdMat = new THREE.MeshBasicMaterial({
+    color: '#eef7f4', transparent: true, opacity: .85,
+    side: THREE.DoubleSide, depthWrite: false, toneMapped: false
   });
-  clouds.renderOrder = -10;
-  clouds.visible = false;
-  scene.add(clouds);
-
-  // readable cumulus banks in the avenue's open sky
-  const puffy = new THREE.Group();
-  const clusterSpecs = [
-    [-58, 55, -112, 78, 24, .88], [38, 63, -150, 105, 32, .9],
-    [5, 78, -210, 145, 44, .8], [96, 44, -118, 62, 20, .72],
-    [-108, 38, -92, 58, 17, .62]
-  ];
-  clusterSpecs.forEach(([cx,cy,cz,sw,sh,op],ci)=>{
-    for(let i=0;i<4;i++){
-      const sp=new THREE.Sprite(cloudMat.clone());
-      const dx=(i-1.5)*sw*.34, dy=(i%2?1:-1)*sh*.12;
-      sp.position.set(cx+dx,cy+dy,cz+Math.sin(i*1.8)*6);
-      sp.scale.set(sw*(.75+((i*17)%20)/100),sh*(.8+((i*11)%18)/100),1);
-      sp.material.opacity=op*(.72+((i*13)%17)/100);
-      sp.material.color.set('#fff9ee');
-      puffy.add(sp);
-    }
-  });
-  puffy.renderOrder = -9;
-  puffy.visible = false;
-  scene.add(puffy);
-
-  // high cumulus clustered just above the rooftops
-  const highClouds = new THREE.Group();
-  const bankSpecs = [
-    { x:-22, y:54, z:-88, sx:56, sy:19, n:13, op:.9, seed:5 },
-    { x:30, y:68, z:-132, sx:74, sy:24, n:14, op:.92, seed:9 },
-    { x:-62, y:76, z:-160, sx:68, sy:22, n:11, op:.8, seed:13 },
-    { x:8, y:86, z:-220, sx:100, sy:31, n:13, op:.72, seed:17 }
-  ];
-  for (const spec of bankSpecs) {
-    const rr = rng(spec.seed);
-    for (let i=0;i<spec.n;i++) {
-      const sp = new THREE.Sprite(cloudMat.clone());
-      const a = (i/spec.n)*TAU*1.15 + rr()*.2;
-      const rad = (0.15 + rr()*.65) * spec.sx;
-      const px = spec.x + Math.cos(a)*rad;
-      const py = spec.y + Math.sin(a)*rad*.26 + (rr()-.5)*spec.sy*.5;
-      const pz = spec.z + Math.sin(a)*rad*.35 + (rr()-.5)*8;
-      sp.position.set(px,py,pz);
-      const sz = spec.sx*(.18+rr()*.23);
-      sp.scale.set(sz, sz*.48, 1);
-      sp.material.opacity = spec.op*(.45+rr()*.5);
-      sp.material.color.set(rr()>.45?'#fffdf3':'#dcf1ff');
-      sp.material.fog = false;
-      highClouds.add(sp);
-    }
+  const birdPos = [], birdIdx = [];
+  let birdV = 0;
+  for (let i = 0; i < 12; i++) {
+    const a = i / 12 * TAU;
+    const rad = 80 + i * 4;
+    const bx = Math.cos(a) * rad;
+    const by = 38 + ((i * 7) % 12);
+    const bz = -110 - Math.sin(a) * rad * .55;
+    const w = 2.2 + (i % 3) * .5, h = 1.1;
+    birdPos.push(bx, by, bz, bx - w, by + h, bz, bx - w * .55, by + .15, bz);
+    birdIdx.push(birdV, birdV + 1, birdV + 2);
+    birdPos.push(bx, by, bz, bx + w * .55, by + .15, bz, bx + w, by + h, bz);
+    birdIdx.push(birdV + 3, birdV + 4, birdV + 5);
+    birdV += 6;
   }
-  highClouds.renderOrder = -9;
-  highClouds.visible = false;
-  scene.add(highClouds);
-
-  // high bright wisps catch the sun near the top of frame
-  for(let i=0;i<5;i++){
-    const sp=new THREE.Sprite(cloudMat.clone());
-    sp.position.set(-80+i*52, 95+i*4, -210-i*10);
-    sp.scale.set(120,22,1); sp.material.opacity=.28; sp.material.color.set('#fffdf4');
-    puffy.add(sp);
-  }
-
-  // birds, tiny and bright — the scale cue that sells the sky
-  const birdTexture = canvasTexture(128,128,(ctx,s)=>{
-    ctx.clearRect(0,0,s,s); ctx.strokeStyle='rgba(245,249,246,.95)';ctx.lineWidth=7;ctx.lineCap='round';
-    ctx.beginPath();ctx.moveTo(18,74);ctx.quadraticCurveTo(45,40,64,70);ctx.quadraticCurveTo(82,40,110,74);ctx.stroke();
-  },{clamp:true});
-  const birds = new THREE.Group();
-  const birdMat = new THREE.SpriteMaterial({map:birdTexture,transparent:true,opacity:.9,depthWrite:false,toneMapped:false,color:'#eaf3f1'});
-  for(let i=0;i<12;i++){
-    const b=new THREE.Sprite(birdMat.clone()); const a=i/12*TAU;
-    const rad=80+i*4;
-    b.position.set(Math.cos(a)*rad, 38+((i*7)%12), -110-Math.sin(a)*rad*.55);
-    b.scale.set(4.2,2.6,1); b.material.opacity=.5+((i*3)%5)*.08;
-    birds.add(b);
-  }
+  const birdGeo = new THREE.BufferGeometry();
+  birdGeo.setAttribute('position', new THREE.Float32BufferAttribute(birdPos, 3));
+  birdGeo.setIndex(birdIdx);
+  const birds = new THREE.Mesh(birdGeo, birdMat);
+  birds.frustumCulled = false;
   scene.add(birds);
 
   function update(t) {
-    clouds.rotation.y = Math.sin(t * .008) * .02;
     birds.position.x = Math.sin(t * .02) * 10;
     birds.position.y = Math.sin(t * .05) * 1.2;
   }
-  return { skyTex, envRT, sunGroup, sun, clouds, birds, update };
+  return { skyTex, envRT, sunGroup, sun, birds, update };
 }

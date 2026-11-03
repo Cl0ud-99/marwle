@@ -62,6 +62,12 @@ const WaterShader = {
       float z = vWorld.z;
       vec2 p = vWorld.xz;
 
+      // cheap bounding reject: the mirror plane is much larger than the area
+      // that can ever be wet, so bail before the fbm + 5 reflection taps
+      float inStreet = step(abs(x), 7.4) * step(-88.0, z) * step(z, 18.5);
+      float inPool = step(length(p - vec2(0.0, -72.0)), 8.8);
+      if (inStreet + inPool < 0.5) discard;
+
       // long, narrow water channel running under the avenue
       float strip = smoothstep(1.36, 1.18, abs(x));
       strip *= smoothstep(16.0, 10.0, z) * smoothstep(-86.0, -78.0, z);
@@ -123,8 +129,11 @@ const WaterShader = {
   `
 };
 
-export function createWaterMirror(renderer) {
-  const maxTex = Math.min(1024, Math.max(640, Math.floor(window.innerWidth * .62)));
+export function createWaterMirror(renderer, opts = {}) {
+  let reflectionScale = opts.scale ?? 1;
+  let refreshEvery = opts.every ?? 3;
+  const sizeFor = () => Math.min(1536, Math.max(512, Math.floor(window.innerWidth * .62 * reflectionScale)));
+  const maxTex = sizeFor();
   const geo = new THREE.PlaneGeometry(22, 150, 1, 1);
   const mirror = new Reflector(geo, {
     clipBias: 0.003,
@@ -145,9 +154,13 @@ export function createWaterMirror(renderer) {
   const originalBefore = mirror.onBeforeRender;
   mirror._reflectionFrame = 0;
   mirror._hasReflection = false;
+  mirror.refreshEvery = refreshEvery; // 1 = every frame, 3 = every third frame
   mirror.onBeforeRender = function (renderer, scene, camera) {
     this._reflectionFrame++;
-    if (this._hasReflection && (this._reflectionFrame % 2 !== 0)) return;
+    if (this._hasReflection && (this._reflectionFrame % this.refreshEvery !== 0)) return;
+    // the reflection camera only sees layer 0: dynamic street props live on
+    // layer 1 and are skipped, which removes a large slice of draw calls
+    this.getReflectionCamera(camera).layers.set(0);
     originalBefore.call(this, renderer, scene, camera);
     this._hasReflection = true;
   };
@@ -161,9 +174,15 @@ export function createWaterMirror(renderer) {
     mirror.material.uniforms.uTime.value = t;
   }
   function resize() {
-    const s = Math.min(1024, Math.max(640, Math.floor(window.innerWidth * .62)));
+    const s = sizeFor();
     mirror.getRenderTarget().setSize(s, Math.floor(s * .56));
   }
+  function setQuality(q) {
+    reflectionScale = q.reflectionScale ?? reflectionScale;
+    refreshEvery = q.reflectEvery ?? refreshEvery;
+    mirror.refreshEvery = refreshEvery;
+    resize();
+  }
 
-  return { mirror, baseMat, update, resize };
+  return { mirror, baseMat, update, resize, setQuality };
 }

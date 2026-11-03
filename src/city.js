@@ -1,24 +1,31 @@
 import * as THREE from 'three';
 import { MAT, TEX } from './materials.js';
 import {
-  rBox, mesh, plane, cyl, sphere, rng, rand, pick, TAU, tube, canvasTexture, textTexture,
-  makeInstanced, mergeStatic, setShadows, roundRect, glowTexture
+  rBox, mesh, plane, cyl, sphere, rng, TAU, canvasTexture, textTexture,
+  makeInstanced, mergeStatic, setShadows, roundRect,
+  torus
 } from './utils.js';
 import {
   createFizzDome, createDreamTower, createMarwleHall, createGenericBuilding,
-  createGateBridge, createSkylineTower, createSunPalace, billboard
+  createSunPalace, billboard
 } from './architecture.js';
 import {
   createLamp, createTree, createShrubPlanter, createBench, createCar, createScooter,
   createPerson, animatePerson, createCafeSet, createFountain, createPennantLine,
-  createDrone, createPetalField, contactShadow, createTram, createCandyCart
+  createDrone, createPetalField, contactShadow, createCandyCart
 } from './props.js';
 import { createWaterMirror } from './water.js';
 
 const V = (x,y,z) => new THREE.Vector3(x,y,z);
 
 function markDynamic(obj) {
-  obj.traverse(o => { o.userData.noMerge = true; });
+  // Mark the group itself. mergeStatic() skips the whole subtree for the
+  // static city pass, then collapses the group's own internals in local space.
+  // Layer 1 = "moving street furniture": the main camera sees it, the planar
+  // reflection camera does not, and the baked sun shadow ignores it.
+  obj.userData.noMerge = true;
+  obj.userData.dynamic = true;
+  obj.traverse(o => { o.layers.set(1); });
 }
 
 function add(parent, geo, mat, pos, opts = {}) {
@@ -37,31 +44,7 @@ function addBuilding(root, b, x, z, rotY) {
   return b;
 }
 
-function makeRoadDecalTexture(text = 'SUGARLINE', color = '#f7ecd4') {
-  return canvasTexture(1024, 256, (ctx, w, h) => {
-    ctx.clearRect(0,0,w,h);
-    ctx.fillStyle = color;
-    ctx.font = '900 150px Bungee, Arial Black, sans-serif';
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.globalAlpha=.8;
-    ctx.fillText(text, w/2, h/2);
-    ctx.globalAlpha=1;
-  }, { clamp: true });
-}
 
-function makeBannerTexture(title, sub, colors) {
-  return canvasTexture(1024, 512, (ctx,w,h)=>{
-    ctx.fillStyle = colors[0]; ctx.fillRect(0,0,w,h);
-    ctx.fillStyle = colors[1];
-    ctx.beginPath(); ctx.moveTo(0,h*.58); ctx.quadraticCurveTo(w*.5,h*.38,w,h*.62); ctx.lineTo(w,h); ctx.lineTo(0,h); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=12; roundRect(ctx,18,18,w-36,h-36,38); ctx.stroke();
-    ctx.fillStyle='#fff8e7'; ctx.font='900 190px Bungee, Arial Black, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(title, w/2, h*.42);
-    ctx.font='600 42px Outfit, sans-serif'; ctx.fillText(sub, w/2, h*.78);
-    ctx.fillStyle=colors[0]; ctx.beginPath(); ctx.arc(w*.86,h*.2,48,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(w*.86,h*.2,24,0,Math.PI*2); ctx.fill();
-  }, { clamp: true });
-}
 
 function makeBalloon() {
   const g = new THREE.Group();
@@ -127,22 +110,25 @@ export function buildCity(scene, renderer) {
   const roadLogo = new THREE.Mesh(new THREE.PlaneGeometry(3.4,3.4), new THREE.MeshBasicMaterial({map:roadMark, transparent:true, opacity:.8, depthWrite:false, toneMapped:false}));
   roadLogo.rotation.x=-Math.PI/2; roadLogo.position.set(-4.4,.075,19.2); roadLogo.renderOrder=5; roadLogo.userData.noMerge=true; root.add(roadLogo);
 
-  // central water rill bed: deep turquoise mosaic, visible through the mirror shader
-  const rillTex = canvasTexture(512, 2048, (ctx,w,h)=>{
-    const g=ctx.createLinearGradient(0,0,w,0);
+  // central water rill bed: deep turquoise mosaic, visible through the mirror shader.
+  // Seeded so the bed is byte-identical on every reload.
+  const rillTex = canvasTexture(512, 2048, (ctx,w,h) => {
+    const rr = rng(913);
+    const g = ctx.createLinearGradient(0,0,w,0);
     g.addColorStop(0,'#0a4e60'); g.addColorStop(.25,'#137b86'); g.addColorStop(.5,'#2dabb0'); g.addColorStop(.75,'#116f7d'); g.addColorStop(1,'#0a4e60');
-    ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+    ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
     // soft caustic ribbons running down the channel
-    for(let i=0;i<34;i++){
-      const yy=Math.random()*h, ww=30+Math.random()*120;
-      ctx.strokeStyle='rgba(185,255,246,'+(.03+Math.random()*.08)+')';
-      ctx.lineWidth=2+Math.random()*8; ctx.beginPath();
-      ctx.moveTo(0,yy);
-      for(let x=0;x<=w;x+=18) ctx.lineTo(x,yy+Math.sin(x*.018+i)*8+Math.sin(x*.05+i*2)*3);
+    for (let i = 0; i < 34; i++) {
+      const yy = rr() * h;
+      ctx.strokeStyle = 'rgba(185,255,246,' + (.03 + rr()*.08) + ')';
+      ctx.lineWidth = 2 + rr()*8; ctx.beginPath();
+      ctx.moveTo(0, yy);
+      for (let x = 0; x <= w; x += 18) ctx.lineTo(x, yy + Math.sin(x*.018+i)*8 + Math.sin(x*.05+i*2)*3);
       ctx.stroke();
     }
-    ctx.globalAlpha=.35;
-    for(let i=0;i<250;i++){ctx.fillStyle=i%3?'#d8ffff':'#8ff1e7';ctx.beginPath();ctx.arc(Math.random()*w,Math.random()*h,1+Math.random()*2.5,0,7);ctx.fill();}
+    ctx.globalAlpha = .35;
+    for (let i = 0; i < 250; i++) { ctx.fillStyle = i%3 ? '#d8ffff' : '#8ff1e7'; ctx.beginPath(); ctx.arc(rr()*w, rr()*h, 1 + rr()*2.5, 0, 7); ctx.fill(); }
+    ctx.globalAlpha = 1;
   });
   const bedMat = new THREE.MeshPhysicalMaterial({ map:rillTex, color:'#b7fff7', roughness:.2, metalness:.08, clearcoat:.8, clearcoatRoughness:.12, envMapIntensity:1.2 });
   add(root, plane(2.55, 86), bedMat, [0,.025,-26], { rot:[-Math.PI/2,0,0], cast:false });
@@ -178,8 +164,8 @@ export function buildCity(scene, renderer) {
   },{clamp:true});
   const poolBedMat = new THREE.MeshPhysicalMaterial({ map:poolTex, color:'#c5fff8', roughness:.18, metalness:.12, clearcoat:1, clearcoatRoughness:.1, envMapIntensity:1.4 });
   add(root, new THREE.CircleGeometry(8.8,96), poolBedMat, [0,.045,-72], {rot:[-Math.PI/2,0,0],cast:false});
-  add(root, new THREE.TorusGeometry(8.85,.24,12,96), MAT.marble, [0,.08,-72], {rot:[Math.PI/2,0,0],cast:false});
-  add(root, new THREE.TorusGeometry(8.85,.08,8,96), MAT.gold, [0,.17,-72], {rot:[Math.PI/2,0,0],cast:false});
+  add(root, torus(8.85,.24,12,96), MAT.marble, [0,.08,-72], {rot:[Math.PI/2,0,0],cast:false});
+  add(root, torus(8.85,.08,8,96), MAT.gold, [0,.17,-72], {rot:[Math.PI/2,0,0],cast:false});
 
   // mirror surface: water rill + pool + damp paving
   const water = createWaterMirror(renderer);
@@ -198,7 +184,7 @@ export function buildCity(scene, renderer) {
   const l3 = addBuilding(root, createGenericBuilding({ width:16, depth:10, height:18.5, body:MAT.paint_butter, trim:MAT.paint_coral, accent:MAT.paint_teal, rows:4, cols:5, roof:'garden', seed:13, signTex:TEX.candy, cornerTower:true }), -16.0, -37.5, leftRot);
   const r2 = addBuilding(root, createGenericBuilding({ width:17, depth:11, height:21, body:MAT.paint_coral, trim:MAT.paint_cream, accent:MAT.paint_blue, rows:5, cols:5, roof:'sundae', seed:24, signTex:TEX.soda, balconyRow:2 }), 16.7, -17.0, rightRot);
   const l4 = addBuilding(root, createGenericBuilding({ width:18, depth:12, height:23, body:MAT.paint_lavender, trim:MAT.paint_butter, accent:MAT.paint_coral, rows:5, cols:5, roof:'donut', seed:35, signTex:TEX.dream, cornerTower:true }), 17.0, -39.5, rightRot);
-  const l5 = addBuilding(root, createGenericBuilding({ width:18, depth:12, height:25, body:MAT.paint_mint, trim:MAT.paint_coral, accent:MAT.paint_gold ?? MAT.gold, rows:5, cols:5, roof:'ring', seed:46, signTex:TEX.dream }), -17.0, -58.5, leftRot);
+  const l5 = addBuilding(root, createGenericBuilding({ width:18, depth:12, height:25, body:MAT.paint_mint, trim:MAT.paint_coral, accent:MAT.gold, rows:5, cols:5, roof:'ring', seed:46, signTex:TEX.dream }), -17.0, -58.5, leftRot);
   const r4 = addBuilding(root, createGenericBuilding({ width:18, depth:12, height:24, body:MAT.paint_peach, trim:MAT.paint_cream, accent:MAT.paint_magenta, rows:5, cols:5, roof:'rocket', seed:57, signTex:TEX.candy }), 17.4, -59.5, rightRot);
   const l6 = addBuilding(root, createGenericBuilding({ width:20, depth:13, height:27, body:MAT.paint_blue, trim:MAT.paint_cream, accent:MAT.paint_butter, rows:6, cols:6, roof:'garden', seed:68, signTex:TEX.soda, cornerTower:true }), -18.2, -84.0, leftRot);
   const r5 = addBuilding(root, createGenericBuilding({ width:20, depth:13, height:26, body:MAT.paint_rose, trim:MAT.paint_cream, accent:MAT.paint_teal, rows:6, cols:6, roof:'sundae', seed:79, signTex:TEX.candy }), 18.0, -84.5, rightRot);
@@ -218,8 +204,7 @@ export function buildCity(scene, renderer) {
   // vertical blade sign near the left dome, like a beacon for the street
   const blade = new THREE.Group();
   const signFrame = add(blade, rBox(3.0, 8.1, .42, .14, 3), MAT.paint_glossRed, [0,0,0]);
-  const signPlane = add(blade, plane(2.62, 7.5), MAT.sign(TEX.fizz, 1.25), [0,0,.235], {cast:false, receive:false});
-  signPlane.userData.noMerge = true;
+  add(blade, plane(2.62, 7.5), MAT.sign(TEX.fizz, 1.25), [0,0,.235], {cast:false, receive:false});
   add(blade, rBox(3.2,.22,.6,.08), MAT.gold, [0,4.12,.02]);
   add(blade, rBox(3.2,.22,.6,.08), MAT.gold, [0,-4.12,.02]);
   for(let i=0;i<2;i++) add(blade, rBox(1.1,.16,.35,.04), MAT.darkMetal, [0, 3.2-i*6.4, -.4]);
@@ -231,7 +216,7 @@ export function buildCity(scene, renderer) {
   // marwle blade roof sign on right
   const roofBlade = new THREE.Group();
   add(roofBlade, rBox(7.3,2.4,.35,.1,3), MAT.paint_glossRed, [0,0,0]);
-  const rbPlane = add(roofBlade, plane(6.95,1.95), MAT.sign(TEX.marwle,1.6), [0,0,.2], {cast:false,receive:false}); rbPlane.userData.noMerge=true;
+  add(roofBlade, plane(6.95,1.95), MAT.sign(TEX.marwle,1.6), [0,0,.2], {cast:false,receive:false});
   roofBlade.position.set(10.8, 18.2, 2.0); roofBlade.rotation.y=-.35; root.add(roofBlade);
   const rbHalo=new THREE.Sprite(MAT.glowSprite('#ff6d7d',.18)); rbHalo.position.set(10.6,18.2,2.4); rbHalo.scale.set(10,4,1); root.add(rbHalo);
 
@@ -240,9 +225,6 @@ export function buildCity(scene, renderer) {
   mural.position.set(10.35, 3.35, 10.02); mural.rotation.y = -.60; root.add(mural);
   const muralGlow = new THREE.Sprite(MAT.glowSprite('#ffd38b',.06)); muralGlow.position.set(10.2,3.4,10.4); muralGlow.scale.set(4,5,1); root.add(muralGlow);
 
-  // banners hung across the boulevard
-  const bannerTex1 = makeBannerTexture('TASTE THE SKY', 'MARWLE · SUGARLINE DISTRICT', ['#e64865','#ffbb58']);
-  const bannerTex2 = makeBannerTexture('STAY SWEET', 'A SUNNY DAY IN DISTRICT 07', ['#1c9dad','#ffd062']);
 
   // pennant lines
   const p1=createPennantLine(V(-7.2,8.6,-10),V(7.2,8.2,-10),11,15,.7); root.add(p1.group); flagUpdaters.push(p1.update);
@@ -260,7 +242,7 @@ export function buildCity(scene, renderer) {
   for(let z=19;z>-88;z-=2.8){ if(z%8.4<2.8) { bollards.push({x:-6.1,y:.15,z,scale:1}); bollards.push({x:6.1,y:.15,z,scale:1}); } }
   const bmat=MAT.darkMetal;
   root.add(makeInstanced(new THREE.CylinderGeometry(.13,.17,.85,12), bmat, bollards, true, true));
-  root.add(makeInstanced(new THREE.TorusGeometry(.14,.025,5,16), MAT.gold, bollards.map(b=>({x:b.x,y:b.y+.55,z:b.z,rot:[Math.PI/2,0,0]})), false, false));
+  root.add(makeInstanced(torus(.14,.025,5,16), MAT.gold, bollards.map(b=>({x:b.x,y:b.y+.55,z:b.z,rot:[Math.PI/2,0,0]})), false, false));
   // trees and planters
   const treePositions = [[-8.2,3.0,'pink',1.15],[-8.0,-27.5,'palm',1.0],[-8.4,-48.0,'puff',1.1],[8.0,16.0,'palm',.95],[8.2,-3.0,'pink',1.15],[8.0,-34.0,'palm',1.05],[8.2,-54.0,'puff',.95],[-8.0,10.5,'puff',.75]];
   treePositions.forEach(([x,z,kind,s],i)=>{ const t=createTree(300+i,kind,s); t.position.set(x,.12,z); t.rotation.y=(i*.9)%TAU; root.add(t); const sh=contactShadow(3.2*s,3.2*s,.27); sh.position.set(x,.135,z); root.add(sh); });
@@ -282,7 +264,11 @@ export function buildCity(scene, renderer) {
   const sc3=createScooter('#e4b13c'); sc3.position.set(8.9,.13,28.0); sc3.rotation.y=-.1; root.add(sc3);
   const cart = createCandyCart();
   cart.group.position.set(-4.25,.03,15.2); cart.group.rotation.y=.10; root.add(cart.group); markDynamic(cart.group);
-  updaters.push(t=>{ cart.balloons.forEach((b,i)=>{ b.position.y += Math.sin(t*1.2+i*1.1)*.0007; b.rotation.z=Math.sin(t*.7+i)*.05; }); });
+  updaters.push(t=>{ cart.balloons.forEach((b,i)=>{
+    // absolute offset from the authored height: frame-rate independent and stable under freeze
+    b.position.y = b.userData.baseY + Math.sin(t*1.2+i*1.1)*.035;
+    b.rotation.z = Math.sin(t*.7+i)*.05;
+  }); });
   // scooters
   const sc1=createScooter('#20b4b7'); sc1.position.set(8.9,.13,7.0); sc1.rotation.y=.2; root.add(sc1);
   const sc2=createScooter('#e45c70'); sc2.position.set(-8.9,.13,-24.0); sc2.rotation.y=Math.PI-.15; root.add(sc2);
@@ -316,8 +302,8 @@ export function buildCity(scene, renderer) {
     add(arch, rBox(4.3,.7,4.5,.15,2), MAT.paint_teal, [side*13.0,25.5,0]);
     add(arch, rBox(1.2,6,.8,.15,3), MAT.paint_butter, [side*13.0,22.0,2.4]);
   }
-  add(arch, new THREE.TorusGeometry(13.0,1.1,16,80,Math.PI), MAT.paint_glossRed, [0,28,0]);
-  add(arch, new THREE.TorusGeometry(13.0,.16,8,80,Math.PI), MAT.gold, [0,28,0]);
+  add(arch, torus(13.0,1.1,16,80,Math.PI), MAT.paint_glossRed, [0,28,0]);
+  add(arch, torus(13.0,.16,8,80,Math.PI), MAT.gold, [0,28,0]);
   const archSign = billboardArch(TEX.marwle, 12, 2.8); archSign.position.set(0,33,-.1); arch.add(archSign);
   arch.position.set(0,0,-104); root.add(arch);
 
@@ -342,7 +328,11 @@ export function buildCity(scene, renderer) {
     [10.8,.14,-55.0,1,'#ffb35c','#3c5b64',1.0],[-9.0,.14,16.5,-1,'#8fdcad','#8d4f58',.9]
   ];
   peopleSpecs.forEach(([x,y,z,dir,c1,c2,speed],i)=>{
-    const p=createPerson(900+i,[c1,c2]); p.position.set(x,y,z); p.rotation.y=dir<0?0:Math.PI; p.userData.phase=i*1.7; p.userData.dir=dir; p.userData.speed=speed; p.userData.startZ=z; p.userData.walkZ=z;
+    // the model is authored facing +Z, so rotation 0 means "walking towards +Z"
+    const p=createPerson(900+i,[c1,c2]); p.position.set(x,y,z); p.rotation.y=dir>0?0:Math.PI; p.userData.phase=i*1.7; p.userData.dir=dir; p.userData.speed=speed; p.userData.startZ=z; p.userData.walkZ=z;
+    // moving props are excluded from the baked shadow map, so each one carries
+    // its own soft ground contact patch instead of a frozen long shadow
+    const cs=contactShadow(1.7,1.7,.34); cs.position.y=.012; p.add(cs);
     markDynamic(p); root.add(p); pedestrians.push(p);
   });
   updaters.push(t=>{
@@ -352,7 +342,7 @@ export function buildCity(scene, renderer) {
       const span=95;
       z = -55 + ((z+55)%span+span)%span;
       p.position.z=z;
-      p.rotation.y = dir>0?Math.PI:0;
+      p.rotation.y = dir>0?0:Math.PI;
       animatePerson(p,t,speed,dir);
     });
   });
@@ -367,7 +357,9 @@ export function buildCity(scene, renderer) {
   const petals=createPetalField(240,[-25,25,-110,25],77); root.add(petals.points); updaters.push(petals.update);
 
   // rooftop & facade point light pools: warm pockets at street level
-  const lightSpecs = [[-8.8,3.5,8,0xffb46d],[8.8,3.2,5,0xffc07b],[-8.9,3.0,-12,0x9ffff0],[8.9,3.0,-18,0xffb46d],[-8.8,3.0,-36,0xffd391],[8.8,3.0,-46,0x9ef5e7],[-8.8,3.0,-62,0xffb46d],[8.8,3.0,-64,0xffd391]];
+  // four warm/cool pockets carry the street lighting; the rest of the glow is
+  // emissive bulbs and halo sprites, which cost nothing per fragment
+  const lightSpecs = [[-8.8,3.5,8,0xffb46d],[8.8,3.2,5,0xffc07b],[-8.8,3.0,-36,0xffd391],[8.8,3.0,-46,0x9ef5e7]];
   for(const [x,y,z,c] of lightSpecs){ const pl=new THREE.PointLight(c, 2.6, 7, 2); pl.position.set(x,y,z); root.add(pl); }
 
   // background fog / haze plane behind skyline handled by scene fog; add low mist planes
@@ -399,7 +391,6 @@ export function buildCity(scene, renderer) {
       const s = add(cg, sphere(r, 12, 8), cloudMat, [px,py,pz], {cast:false, receive:false});
       s.scale.set(1.1,.64,1.0);
     }
-    markDynamic(cg);
     root.add(cg);
   }
   cloudBank(-33, 42, -82, 36, 14, 21);
@@ -409,12 +400,26 @@ export function buildCity(scene, renderer) {
 
   // merge all the static architecture into a small set of draw calls
   const mergeInfo = mergeStatic(root);
+  // Moving props cannot join the static city, but their own static internals
+  // can be merged in local space (e.g. a pedestrian's body, a cart's bodywork).
+  const dynamicInfo = [];
+  for (const d of root.children) {
+    if (!d.userData.dynamic) continue;
+    const info = mergeStatic(d, { local: true });
+    dynamicInfo.push({ name: d.name || d.type, count: info.count });
+  }
   setShadows(root,true,true);
+  // moving props are excluded from the baked shadow map (layer 1); they keep
+  // only their soft contact patches, so no shadow is left behind when they walk
+  for (const d of root.children) {
+    if (!d.userData.dynamic) continue;
+    d.traverse(o => { if (o.isMesh) o.castShadow = false; });
+  }
 
   function billboardArch(tex,w,h){
     const g=new THREE.Group();
     add(g,rBox(w+.3,h+.3,.3,.08,2),MAT.gold,[0,0,-.18]);
-    const p=add(g,plane(w,h),MAT.sign(tex,1.4),[0,0,.02],{cast:false,receive:false}); p.userData.noMerge=true;
+    add(g,plane(w,h),MAT.sign(tex,1.4),[0,0,.02],{cast:false,receive:false});
     return g;
   }
 
@@ -424,5 +429,5 @@ export function buildCity(scene, renderer) {
     // sky tram handles itself
   }
 
-  return { root, water, fountain, pedestrians, mergeInfo, update };
+  return { root, water, fountain, pedestrians, mergeInfo, dynamicInfo, update };
 }
