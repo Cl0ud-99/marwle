@@ -406,8 +406,8 @@ export function buildCity(scene, renderer) {
 
   // ── new district landmarks ────────────────────────────────
   const clockTower = createClockTower();
-  clockTower.position.set(-10, 0, -214); root.add(clockTower);
-  colliders.push({ kind:'box', x:-10, z:-214, hx:6, hz:6, rot:0 });
+  clockTower.position.set(-9.5, 0, -214); root.add(clockTower);
+  colliders.push({ kind:'box', x:-9.5, z:-214, hx:6, hz:6, rot:0 });
   const candyWheel = createCandyWheel();
   candyWheel.position.set(21, 0, -160); root.add(candyWheel);
   colliders.push({ kind:'circle', x:21, z:-160, r:4.6 });
@@ -572,8 +572,8 @@ export function buildCity(scene, renderer) {
 
   // gate bridge and skyline
   // the open avenue deliberately leads all the way to the fountain court
-  const palace = createSunPalace(); palace.position.set(9,0,-214); root.add(palace);
-  colliders.push({ kind:'box', x:9, z:-214, hx:9, hz:7, rot:0 });
+  const palace = createSunPalace(); palace.position.set(6.5,0,-214); root.add(palace);
+  colliders.push({ kind:'box', x:6.5, z:-214, hx:9, hz:7, rot:0 });
   // grand ending arch
   const arch = new THREE.Group();
   for(const side of [-1,1]){
