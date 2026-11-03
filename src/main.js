@@ -346,9 +346,13 @@ async function boot() {
   });
   document.addEventListener('pointerup', () => { drag=null; canvas.classList.remove('dragging'); });
   document.addEventListener('pointercancel', () => { drag=null; canvas.classList.remove('dragging'); });
+  const MOVE_KEYS = ['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
   window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-    if (['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','Space'].includes(e.code)) keysDown.add(e.code);
+    // pressing a movement key from the intro / cinema / photo modes drops
+    // straight into the walk camera, so a composed-shot URL is never a dead end
+    if (MOVE_KEYS.includes(e.code) && mode !== 'explore') enterExplore();
+    if (MOVE_KEYS.includes(e.code) || ['ShiftLeft','ShiftRight','Space'].includes(e.code)) keysDown.add(e.code);
     if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) jump(); }
     if (e.code === 'KeyC') { startCinema(); }
     if (e.code === 'KeyP') { if (mode==='photo') enterExplore(); else enterPhoto(); }
