@@ -4,11 +4,11 @@
 
 **2 districts · 300 m · 100% procedural**
 
-[**Live preview**](https://cl0ud-99.github.io/marwle/) — runs in the browser, nothing to install.
+> **[▶ Open the live demo](https://cl0ud-99.github.io/marwle/)** — two districts, one sunset. No install.
 
 A playable candy-city street: two linked districts on a 300 m boulevard, a mirrored water lane, a fountain court and a painted sunset. Built in Three.js, but every building, sign, cloud, prop and sound in the scene is generated from code at load time. No model files, no imported HDRIs, no external audio.
 
-![hero](docs/shots/hero.jpg)
+[![hero](docs/shots/hero.jpg)](https://cl0ud-99.github.io/marwle/)
 
 ## Views
 
