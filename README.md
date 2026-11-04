@@ -30,7 +30,7 @@ MARWLE is a procedural, single-scene city demo: two linked districts on a 300 m 
 - **3 landmarks**: the gatehouse clock tower behind the opening, the JOY palace at the south terminus, and the candy ferris wheel.
 - **20 pedestrians**, **12 cars**, **8 scooters**, **2 candy carts**, plus cafés, benches, planters, lamps, vending machines and pennant lines.
 - Everything — geometry, signs, textures, sky, clouds, audio — is generated at load time. No model files, imported HDRIs or audio samples.
-- Roughly **10.2M triangles / ~986 draw calls** in the standard walk view; photo mode adds GTAO and DOF.
+- Roughly **10.2M triangles / ~975 draw calls** in the standard walk view; photo mode adds GTAO and DOF and roughly triples the geometry passes.
 - Controls: **WASD / arrows** walk, mouse drag looks, **Space** jumps, **P** photo mode, **1–5** composed cameras. **?shot=south** and **?shot=north** are direct links to the two landmark views.
 
 Built with Three.js and esbuild; all scene code, shaders, UI and audio are original. Third-party attributions are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
@@ -40,9 +40,9 @@ Built with Three.js and esbuild; all scene code, shaders, UI and audio are origi
 | Path | Role |
 | --- | --- |
 | `src/main.js` | renderer, camera modes, input, UI wiring, post |
-| `src/city.js` | boulevard assembly, ground, water lane, props, animation |
+| `src/city.js` | two-district boulevard, landmarks, ground, water lane, props, animation |
 | `src/architecture.js` | Fizz Dome, Dream Tower, Marwle Hall, Sun Palace, generic buildings |
-| `src/props.js` | lamps, trees, cars, pedestrians, fountain, candy cart, clouds |
+| `src/props.js` | lamps, trees, cars, pedestrians, fountain, candy cart |
 | `src/water.js` | planar reflection + wet-pavement shader |
 | `src/materials.js` | PBR materials, procedural facade patterns, sign canvases |
 | `src/sky.js` | 4096×2048 equirect sky, cumulus, PMREM environment |
@@ -135,6 +135,8 @@ No server is needed for the single file; every image, font and audio graph is em
 | H | Hide interface |
 | Sound button | Toggle procedural ambience |
 
+Any movement key also leaves the intro, cinematic or photo camera and drops straight into the walk view.
+
 ## URL parameters
 
 | Parameter | Effect |
@@ -170,7 +172,7 @@ All building layouts and prop placement use seeded randomness, so the street loo
 
 ## Screenshots
 
-The full 1920×1080 captures are in `docs/shots/`. The uncompressed UI screenshots and offline build live under `shots/` and `dist/` in the working tree.
+The full 1600×900 captures are in `docs/shots/`. The uncompressed UI screenshots and offline build live under `shots/` and `dist/` in the working tree.
 
 ## Credits
 

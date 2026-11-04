@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "MARWLE · Sugarline District — a playable candy-city cinematic",
+  "description": "MARWLE · Sugarline District — a playable two-district procedural candy city",
   "scripts": {
     "build": "node build.mjs",
     "build:site": "node build.mjs --site",
