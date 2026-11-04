@@ -378,11 +378,8 @@ export function createFountain() {
   geom.setAttribute('color', new THREE.BufferAttribute(col,3));
   const mat=new THREE.PointsMaterial({ map: TEX.glow, size:.19, transparent:true, opacity:.8, vertexColors:true, depthWrite:false, blending:THREE.AdditiveBlending, toneMapped:false });
   const points=new THREE.Points(geom,mat); points.frustumCulled=false; g.add(points);
-  // mist
-  const mists=[];
-  for(let i=0;i<8;i++){
-    const s=new THREE.Sprite(MAT.glowSprite('#d6fff9',.08)); s.position.set((r()-.5)*5,.8+r()*2.5,(r()-.5)*5); s.scale.set(2.5,1.3,1); g.add(s); mists.push(s);
-  }
+  // (the old Sprite mist quads rendered as black translucent sheets around
+  // the sculpture; the particle jets already carry the spray)
   const sh=contactShadow(17,17,.22); sh.position.y=.01; g.add(sh);
   function update(t) {
     const arr=geom.attributes.position.array;
@@ -394,7 +391,6 @@ export function createFountain() {
       arr[i*3]=x; arr[i*3+1]=Math.max(.45,y); arr[i*3+2]=z;
     }
     geom.attributes.position.needsUpdate=true;
-    mists.forEach((m,i)=>{const a=(t*.18+i*.13)%1; m.position.y=.8+a*3.4; m.material.opacity=.09*(1-a); m.scale.set(2.4+a*2.2,1.1+a*1.4,1);});
   }
   return { group:g, update };
 }
